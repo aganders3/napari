@@ -669,7 +669,6 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
         self._ndim = ndim
         if 'extent' in self.__dict__:
             del self.extent
-
         self.refresh()  # This call is need for invalidate cache of extent in LayerList. If you remove it pleas ad another workaround.
 
     @property
@@ -683,7 +682,7 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
     def data(self, data):
         raise NotImplementedError()
 
-    @property
+    @cached_property
     @abstractmethod
     def _extent_data(self) -> np.ndarray:
         """Extent of layer in data coordinates.
@@ -710,6 +709,9 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
     @cached_property
     def extent(self) -> Extent:
         """Extent of layer in data and world coordinates."""
+        if '_extent_data' in self.__dict__:
+            del self._extent_data
+
         extent_data = self._extent_data
         data_to_world = self._data_to_world
         extent_world = get_extent_world(

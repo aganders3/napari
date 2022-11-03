@@ -1,6 +1,8 @@
+import math
 import numbers
 import warnings
 from copy import copy, deepcopy
+from functools import cached_property
 from itertools import cycle
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
@@ -677,7 +679,7 @@ class Points(Layer):
         """Determine number of dimensions of the layer."""
         return self.data.shape[1]
 
-    @property
+    @cached_property
     def _extent_data(self) -> np.ndarray:
         """Extent of layer in data coordinates.
 
@@ -1785,10 +1787,12 @@ class Points(Layer):
         if len(view_data) > 0:
             # Get the zoom factor required to fit all data in the thumbnail.
             de = self._extent_data
-            min_vals = [de[0, i] for i in self._slice_input.displayed]
-            shape = np.ceil(
-                [de[1, i] - de[0, i] + 1 for i in self._slice_input.displayed]
-            ).astype(int)
+            # de = self.extent.data
+            displayed_dims = self._slice_input.displayed
+            min_vals = [de[0, i] for i in displayed_dims]
+            shape = [
+                math.ceil(de[1, i] - de[0, i] + 1) for i in displayed_dims
+            ]
             zoom_factor = np.divide(
                 self._thumbnail_shape[:2], shape[-2:]
             ).min()
@@ -1809,7 +1813,7 @@ class Points(Layer):
                 1,  # smallest side should be 1 pixel wide
                 self._thumbnail_shape[:2],
             )
-            coords = np.floor(
+            coords = (
                 (points[:, -2:] - min_vals[-2:] + 0.5) * zoom_factor
             ).astype(int)
             coords = np.clip(coords, 0, thumbnail_shape - 1)

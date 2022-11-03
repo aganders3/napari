@@ -1,5 +1,6 @@
 import warnings
 from copy import copy
+from functools import cached_property
 from typing import Dict, List, Tuple, Union
 
 import numpy as np
@@ -382,7 +383,7 @@ class Vectors(Layer):
         """Determine number of dimensions of the layer."""
         return self.data.shape[2]
 
-    @property
+    @cached_property
     def _extent_data(self) -> np.ndarray:
         """Extent of layer in data coordinates.
 

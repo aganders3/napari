@@ -1,4 +1,5 @@
 import warnings
+from functools import cached_property
 from typing import List, Tuple, Union
 
 import numpy as np
@@ -319,7 +320,7 @@ class Surface(IntensityVisualizationMixin, Layer):
         """Determine number of dimensions of the layer."""
         return self.vertices.shape[1] + (self.vertex_values.ndim - 1)
 
-    @property
+    @cached_property
     def _extent_data(self) -> np.ndarray:
         """Extent of layer in data coordinates.
 

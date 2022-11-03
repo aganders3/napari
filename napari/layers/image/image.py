@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import types
 import warnings
+from functools import cached_property
 from typing import TYPE_CHECKING, List, Sequence, Tuple, Union
 
 import numpy as np
@@ -470,7 +471,7 @@ class _ImageBase(IntensityVisualizationMixin, Layer):
         """Determine number of dimensions of the layer."""
         return len(self.level_shapes[0])
 
-    @property
+    @cached_property
     def _extent_data(self) -> np.ndarray:
         """Extent of layer in data coordinates.
 

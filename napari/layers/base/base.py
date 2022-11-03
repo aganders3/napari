@@ -709,6 +709,7 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
     @cached_property
     def extent(self) -> Extent:
         """Extent of layer in data and world coordinates."""
+        # THIS property is cached, and so is (perhaps) the underlying `_extent_data`
         if '_extent_data' in self.__dict__:
             del self._extent_data
 

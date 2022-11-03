@@ -1,6 +1,7 @@
 import warnings
 from contextlib import contextmanager
 from copy import copy, deepcopy
+from functools import cached_property
 from itertools import cycle
 from typing import Dict, List, Tuple, Union
 
@@ -755,7 +756,7 @@ class Shapes(Layer):
             ndim = self.data[0].shape[1]
         return ndim
 
-    @property
+    @cached_property
     def _extent_data(self) -> np.ndarray:
         """Extent of layer in data coordinates.
 

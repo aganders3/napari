@@ -665,14 +665,14 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
             self._transforms = self._transforms.expand_dims(new_axes)
 
         self._slice_input = self._slice_input.with_ndim(ndim)
-
         self._ndim = ndim
-        if 'extent' in self.__dict__:
-            del self.extent
-        if '_extent_data' in self.__dict__:
-            del self._extent_data
 
+        self._clean_extent_cache()
         self.refresh()  # This call is need for invalidate cache of extent in LayerList. If you remove it pleas ad another workaround.
+
+    def _clean_extent_cache(self):
+        self.__dict__.pop("_extent_data", None)
+        self.__dict__.pop("extent", None)
 
     @property
     @abstractmethod
@@ -712,12 +712,10 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
     @cached_property
     def extent(self) -> Extent:
         """Extent of layer in data and world coordinates."""
-        # THIS property is cached, and so is (perhaps) the underlying `_extent_data`
-        # if '_extent_data' in self.__dict__:
-        #     del self._extent_data
-
         extent_data = self._extent_data
         data_to_world = self._data_to_world
+
+        # Get full nD bounding box
         extent_world = get_extent_world(
             extent_data, data_to_world, self._array_like
         )

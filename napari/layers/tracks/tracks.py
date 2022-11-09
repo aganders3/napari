@@ -2,6 +2,7 @@
 # from napari.utils.events import Event
 # from napari.utils.colormaps import AVAILABLE_COLORMAPS
 
+from functools import cached_property
 from typing import Dict, List, Union
 from warnings import warn
 
@@ -200,7 +201,7 @@ class Tracks(Layer):
         # reset the display before returning
         self._current_displayed_dims = None
 
-    @property
+    @cached_property
     def _extent_data(self) -> np.ndarray:
         """Extent of layer in data coordinates.
 

@@ -1781,12 +1781,18 @@ class Points(Layer):
 
     def _update_thumbnail(self):
         """Update thumbnail with current points and colors."""
+        view_data = self._view_data
         de = self._extent_data
+
+        # Set the default thumbnail to black, opacity 1
+        colormapped = np.zeros(self._thumbnail_shape)
+        colormapped[..., 3] = 1
+
         # return early if the extent data is invalid (e.g. empty layer)
-        if np.isnan(de).any():
+        if len(view_data) == 0 or np.isnan(de).any():
+            self.thumbnail = colormapped
             return
 
-        view_data = self._view_data
         # Get the zoom factor required to fit all data in the thumbnail.
         displayed_dims = self._slice_input.displayed
         min_vals = [de[0, i] for i in displayed_dims]
@@ -1816,6 +1822,7 @@ class Points(Layer):
 
         # Draw single pixel points in the colormapped thumbnail.
         colormapped = np.zeros(tuple(thumbnail_shape) + (4,))
+        colormapped[..., 3] = 1
         colors = self._face.colors[thumbnail_indices]
         colormapped[coords[:, 0], coords[:, 1]] = colors
         colormapped[..., 3] *= self.opacity

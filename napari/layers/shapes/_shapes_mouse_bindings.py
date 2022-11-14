@@ -97,6 +97,7 @@ def select(layer, event):
     layer._set_highlight()
 
     if update_thumbnail:
+        layer._update_dims()
         layer._update_thumbnail()
 
 

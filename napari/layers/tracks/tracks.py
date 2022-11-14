@@ -209,7 +209,7 @@ class Tracks(Layer):
         -------
         extent_data : array, shape (2, D)
         """
-        if len(self.data) == 0:
+        if self.data is None or len(self.data) == 0:
             extrema = np.full((2, self.ndim), np.nan)
         else:
             maxs = np.max(self.data, axis=0)
@@ -279,44 +279,51 @@ class Tracks(Layer):
 
     def _update_thumbnail(self):
         """Update thumbnail with current points and colors."""
+        view_data = self._view_data
+        de = self._extent_data
+
+        # Set the default thumbnail to black, opacity 1
         colormapped = np.zeros(self._thumbnail_shape)
         colormapped[..., 3] = 1
 
-        if self._view_data is not None and self.track_colors is not None:
-            de = self._extent_data
-            min_vals = [de[0, i] for i in self._slice_input.displayed]
-            shape = np.ceil(
-                [de[1, i] - de[0, i] + 1 for i in self._slice_input.displayed]
-            ).astype(int)
-            zoom_factor = np.divide(
-                self._thumbnail_shape[:2], shape[-2:]
-            ).min()
-            if len(self._view_data) > self._max_tracks_thumbnail:
-                thumbnail_indices = np.random.randint(
-                    0, len(self._view_data), self._max_tracks_thumbnail
-                )
-                points = self._view_data[thumbnail_indices]
-            else:
-                points = self._view_data
-                thumbnail_indices = range(len(self._view_data))
+        # return early if the extent data is invalid (e.g. empty layer)
+        if (
+            view_data is None
+            or self.track_colors is None
+            or np.isnan(de).any()
+        ):
+            self.thumbnail = colormapped
+            return
 
-            # get the track coords here
-            coords = np.floor(
-                (points[:, :2] - min_vals[1:] + 0.5) * zoom_factor
-            ).astype(int)
-            coords = np.clip(
-                coords, 0, np.subtract(self._thumbnail_shape[:2], 1)
+        min_vals = [de[0, i] for i in self._slice_input.displayed]
+        shape = np.ceil(
+            [de[1, i] - de[0, i] + 1 for i in self._slice_input.displayed]
+        ).astype(int)
+        zoom_factor = np.divide(self._thumbnail_shape[:2], shape[-2:]).min()
+        if len(self._view_data) > self._max_tracks_thumbnail:
+            thumbnail_indices = np.random.randint(
+                0, len(self._view_data), self._max_tracks_thumbnail
             )
+            points = self._view_data[thumbnail_indices]
+        else:
+            points = self._view_data
+            thumbnail_indices = range(len(self._view_data))
 
-            # modulate track colors as per colormap/current_time
-            colors = self.track_colors[thumbnail_indices]
-            times = self.track_times[thumbnail_indices]
-            alpha = (self.head_length + self.current_time - times) / (
-                self.tail_length + self.head_length
-            )
-            alpha[times > self.current_time] = 1.0
-            colors[:, -1] = np.clip(1.0 - alpha, 0.0, 1.0)
-            colormapped[coords[:, 1], coords[:, 0]] = colors
+        # get the track coords here
+        coords = np.floor(
+            (points[:, :2] - min_vals[1:] + 0.5) * zoom_factor
+        ).astype(int)
+        coords = np.clip(coords, 0, np.subtract(self._thumbnail_shape[:2], 1))
+
+        # modulate track colors as per colormap/current_time
+        colors = self.track_colors[thumbnail_indices]
+        times = self.track_times[thumbnail_indices]
+        alpha = (self.head_length + self.current_time - times) / (
+            self.tail_length + self.head_length
+        )
+        alpha[times > self.current_time] = 1.0
+        colors[:, -1] = np.clip(1.0 - alpha, 0.0, 1.0)
+        colormapped[coords[:, 1], coords[:, 0]] = colors
 
         colormapped[..., 3] *= self.opacity
         self.thumbnail = colormapped

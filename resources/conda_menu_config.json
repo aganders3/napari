@@ -24,12 +24,19 @@
                     "Categories": [
                         "Graphics",
                         "Science"
-                    ]
+                    ],
+                    "MimeType": "x-scheme-handler/napari"
                 },
                 "osx": {
                     "CFBundleName": "napari",
                     "CFBundleDisplayName": "napari",
                     "CFBundleVersion": "__PKG_VERSION__",
+                    "CFBundleURLTypes": [
+                        {
+                            "CFBundleTypeRole": "Viewer",
+                            "CFBundleURLSchemes": ["napari"]
+                        }
+                    ],
                     "entitlements": [
                         "com.apple.security.files.user-selected.read-write",
                         "com.apple.security.files.downloads.read-write",

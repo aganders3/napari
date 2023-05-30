@@ -3,7 +3,7 @@ from napari._qt._qapp_model.qactions._window import ToggleDockWidgetAction
 from napari._qt.qt_main_window import Window
 
 
-def test_dock_widget_toggler(make_napari_viewer):
+def test_dock_widget_toggler(make_napari_viewer, mock_console):
     """Tests `ToggleDockWidgetAction` toggling works."""
     viewer = make_napari_viewer(show=True)
     action = ToggleDockWidgetAction(

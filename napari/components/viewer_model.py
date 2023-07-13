@@ -326,7 +326,6 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         )
 
     def _on_canvases_change(self, event):
-        print("YOOOO from viewer_model")  # , event.source, event.type)
         with self.dims.events.ndisplay.blocker(self.reset_view):
             self.dims.events.ndisplay(value=self.dims.ndisplay)
         with self.dims.events.order.blocker(self.reset_view):
@@ -424,7 +423,7 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     def reset_view(self):
         """Reset the camera view."""
-        print("resetting view")
+        # TODO mutlicanvas: reset camera for each canvas as-needed? sometimes initial view is weird
         extent = self._sliced_extent_world_augmented
         scene_size = extent[1] - extent[0]
         corner = extent[0]

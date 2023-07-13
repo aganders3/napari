@@ -64,6 +64,8 @@ class VispyImageLayer(VispyBaseLayer):
         # Default to 2D (image) node.
         super().__init__(layer, self._layer_node.get_node(2))
 
+        self.slice = layer._slice_input
+
         self._array_like = True
 
         self.layer.events.rendering.connect(self._on_rendering_change)

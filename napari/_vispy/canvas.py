@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from vispy.app.backends._qt import CanvasBackendDesktop
     from vispy.app.canvas import DrawEvent, MouseEvent, ResizeEvent
 
-    from napari.components import ViewerModel
+    from napari.components import MultiCanvas, ViewerModel
     from napari.components.overlays import Overlay
     from napari.utils.events.event import Event
     from napari.utils.key_bindings import KeymapHandler
@@ -96,6 +96,7 @@ class VispyCanvas:
         self,
         viewer: ViewerModel,
         key_map_handler: KeymapHandler,
+        canvas_model: MultiCanvas,
         *args,
         **kwargs,
     ) -> None:
@@ -110,7 +111,7 @@ class VispyCanvas:
         )
         self.view = self.central_widget.add_view(border_width=0)
         self.camera = VispyCamera(
-            self.view, self.viewer.camera, self.viewer.dims
+            self.view, canvas_model.camera, canvas_model.dims
         )
         self.layer_to_visual = {}
         self._overlay_to_visual = {}
@@ -162,17 +163,6 @@ class VispyCanvas:
         self.viewer.layers.events.reordered.connect(self._reorder_layers)
         self.viewer.layers.events.removed.connect(self._remove_layer)
         self.destroyed.connect(self._disconnect_theme)
-
-        self.viewer._canvases.events.connect(self._multi_canvas_change)
-
-    def _multi_canvas_change(self, event):
-        print("YOOOO from vispy canvas")
-        self.camera = VispyCamera(
-            self.view, self.viewer.camera, self.viewer.dims
-        )
-        self.viewer.camera.events.interactive.connect(self._on_interactive)
-        self.viewer.camera.events.zoom.connect(self._on_cursor)
-        self._scene_canvas.events.draw.connect(self.camera.on_draw)
 
     @property
     def destroyed(self) -> pyqtBoundSignal:
@@ -555,7 +545,9 @@ class VispyCanvas:
         """
         self.viewer._canvas_size = self.size
 
-    def add_layer_visual_mapping(self, napari_layer, vispy_layer) -> None:
+    def add_layer_visual_mapping(
+        self, napari_layer, vispy_layer, *, reorder=True
+    ) -> None:
         """Maps a napari layer to its corresponding vispy layer and sets the parent scene of the vispy layer.
 
         Paremeters
@@ -576,7 +568,10 @@ class VispyCanvas:
         napari_layer.events.visible.connect(self._reorder_layers)
         self.viewer.camera.events.angles.connect(vispy_layer._on_camera_move)
 
-        self._reorder_layers()
+        # TODO multicanvas: this is kind of a hack, consider
+        # _add_multiple_lauyer_visual_mapping instead
+        if reorder:
+            self._reorder_layers()
 
     def _remove_layer(self, event: Event) -> None:
         """Upon receiving event closes the Vispy visual, deletes it and reorders the still existing layers.

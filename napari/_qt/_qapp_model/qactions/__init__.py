@@ -21,10 +21,10 @@ def init_qactions() -> None:
     - registering provider functions for the names added to the namespace
     - registering Qt-dependent actions with app-model (i.e. Q_*_ACTIONS actions).
     """
-
     from napari._app_model import get_app
     from napari._qt._qapp_model.qactions._help import Q_HELP_ACTIONS
     from napari._qt._qapp_model.qactions._view import Q_VIEW_ACTIONS
+    from napari._qt._qapp_model.qactions._window import Q_WINDOW_ACTIONS
     from napari._qt.qt_main_window import Window, _QtMainWindow
     from napari._qt.qt_viewer import QtViewer
 
@@ -51,5 +51,5 @@ def init_qactions() -> None:
         return None
 
     # register actions
-    for action in chain(Q_VIEW_ACTIONS, Q_HELP_ACTIONS):
+    for action in chain(Q_VIEW_ACTIONS, Q_WINDOW_ACTIONS, Q_HELP_ACTIONS):
         app.register_action(action)

@@ -38,7 +38,7 @@ from contextlib import suppress
 from itertools import chain
 from multiprocessing.pool import ThreadPool
 from typing import TYPE_CHECKING
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from weakref import WeakKeyDictionary
 
 with suppress(ModuleNotFoundError):
@@ -53,6 +53,7 @@ from packaging.version import parse as parse_version
 from napari.components import LayerList
 from napari.layers import Image, Labels, Points, Shapes, Vectors
 from napari.utils.misc import ROOT_DIR
+from napari.viewer import Viewer
 
 if TYPE_CHECKING:
     from npe2._pytest_plugin import TestPluginManager
@@ -380,6 +381,30 @@ def single_threaded_executor():
     executor.shutdown()
 
 
+@pytest.fixture()
+def mock_console():
+    """Mock the qtconsole to avoid starting an interactive IPython session.
+    In-process IPython kernels can interfere with other tests and are difficult
+    (impossible?) to shutdown.
+    """
+    from napari_console import QtConsole
+    from qtconsole.rich_jupyter_widget import RichJupyterWidget
+
+    class FakeQtConsole(RichJupyterWidget):
+        def __init__(self, viewer: Viewer):
+            super().__init__()
+            self.viewer = viewer
+            self.kernel_client = None
+            self.kernel_manager = None
+
+        _update_theme = Mock()
+        push = Mock()
+        closeEvent = QtConsole.closeEvent
+
+    with patch("napari_console.QtConsole", FakeQtConsole):
+        yield
+
+
 @pytest.fixture(autouse=True)
 def _mock_app():
     """Mock clean 'test_app' `NapariApplication` instance.
@@ -393,7 +418,8 @@ def _mock_app():
     `app_model.Application` in the test. It does not however, register Qt
     related actions or providers. If this is required for a unit test,
     `napari._qt._qapp_model.qactions.init_qactions()` can be used within
-    the test.
+    the test. Please note as `init_qactions()` is `lru_cache` decorated you
+    may need to call `init_qactions.cache_clear()` first.
     """
     from app_model import Application
 

@@ -620,16 +620,12 @@ class Window:
         self._update_theme()
         get_settings().appearance.events.theme.connect(self._update_theme)
 
+        self._add_viewer_dock_widget(self._qt_viewer.dockConsole, tabify=False)
         self._add_viewer_dock_widget(
-            self._qt_viewer.dockConsole, tabify=False, menu=self.window_menu
+            self._qt_viewer.dockLayerControls, tabify=False
         )
         self._add_viewer_dock_widget(
-            self._qt_viewer.dockLayerControls,
-            tabify=False,
-            menu=self.window_menu,
-        )
-        self._add_viewer_dock_widget(
-            self._qt_viewer.dockLayerList, tabify=False, menu=self.window_menu
+            self._qt_viewer.dockLayerList, tabify=False
         )
         if perf.USE_PERFMON:
             self._add_viewer_dock_widget(
@@ -778,7 +774,11 @@ class Window:
         self.main_menu.addMenu(self.view_menu)
         self.plugins_menu = menus.PluginsMenu(self)
         self.main_menu.addMenu(self.plugins_menu)
-        self.window_menu = menus.WindowMenu(self)
+        self.window_menu = build_qmodel_menu(
+            MenuId.MENUBAR_WINDOW,
+            title=trans._('&Window'),
+            parent=self._qt_window,
+        )
         self.main_menu.addMenu(self.window_menu)
         self.help_menu = build_qmodel_menu(
             MenuId.MENUBAR_HELP, title=trans._('&Help'), parent=self._qt_window

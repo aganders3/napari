@@ -83,8 +83,8 @@ class LayerList(SelectableEventedList[Layer]):
         self._ctx = create_context(self)
         if self._ctx is not None:  # happens during Viewer type creation
             self._ctx_keys = LayerListContextKeys(self._ctx)
-            self.events.inserted.connect(self._ctx_keys.update)
-            self.events.removed.connect(self._ctx_keys.update)
+            # self.events.inserted.connect(self._ctx_keys.update)
+            # self.events.removed.connect(self._ctx_keys.update)
 
         self._selection_ctx = create_context(self)
         if (
@@ -93,9 +93,9 @@ class LayerList(SelectableEventedList[Layer]):
             self._selection_ctx_keys = LayerListSelectionContextKeys(
                 self._selection_ctx
             )
-            self.selection.events.changed.connect(
-                self._selection_ctx_keys.update
-            )
+            # self.selection.events.changed.connect(
+            #     self._selection_ctx_keys.update
+            # )
 
     def _process_delete_item(self, item: Layer):
         super()._process_delete_item(item)

@@ -11,6 +11,8 @@ from skimage import data
 
 import napari
 
+Viewer = napari.Viewer
+
 blobs = data.binary_blobs(
     length=128, blob_size_fraction=0.05, n_dim=2, volume_fraction=0.25
 ).astype(float)
@@ -41,7 +43,7 @@ def set_layer_data(viewer):
     viewer.layers[0].data = blobs
 
 
-@napari.Viewer.bind_key('w')
+@Viewer.bind_key('w')
 def hello(viewer):
     # on press
     viewer.status = 'hello world!'

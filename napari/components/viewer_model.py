@@ -191,8 +191,9 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
     title: str = 'napari'
 
     # keep track of multiple canvases
-    # TODO: make a CanvasList
-    # TODO: make this protected from setting/deleting
+    # TODO multicanvas: make a CanvasList
+    # TODO multicanvas: make this protected from setting/deleting
+    # TODO multicanvas: make this a selectable list, keep in sync with active canvas
     _canvases: EventedList[MultiCanvas] = PrivateAttr(
         default_factory=lambda: EventedList([MultiCanvas()]),
     )
@@ -294,21 +295,14 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         self._canvases.events.connect(self._on_canvases_change)
 
     # properties for backward compatibility
+    # TODO multicanvas: camera and dims should not be mutable (tests fail)
     @property
     def camera(self):
         return self._canvases[0].camera
 
-    @camera.setter
-    def camera(self, cam):
-        self._canvases[0].camera = cam
-
     @property
     def dims(self):
         return self._canvases[0].dims
-
-    @dims.setter
-    def dims(self, dims):
-        self._canvases[0].dims = dims
 
     def add_canvas(self):
         new_dims = self.dims.copy()

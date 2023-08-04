@@ -64,10 +64,11 @@ class VispyImageLayer(VispyBaseLayer):
         # Default to 2D (image) node.
         super().__init__(layer, self._layer_node.get_node(2))
 
-        self.slice = layer._slice_input
+        self.slice = layer._slice
 
         self._array_like = True
 
+        self.layer.events.slice.connect(self._on_slice)
         self.layer.events.rendering.connect(self._on_rendering_change)
         self.layer.events.depiction.connect(self._on_depiction_change)
         self.layer.events.interpolation2d.connect(
@@ -101,16 +102,23 @@ class VispyImageLayer(VispyBaseLayer):
         self.reset()
         self._on_data_change()
 
+    def _on_slice(self, event=None):
+        if event is None or not hasattr(event, 'slice'):
+            return
+
+        self.slice = event.slice
+        self._on_data_change()
+
     def _on_display_change(self, data=None):
         parent = self.node.parent
         self.node.parent = None
-        ndisplay = self.layer._slice_input.ndisplay
+        ndisplay = self.slice.dims.ndisplay
         self.node = self._layer_node.get_node(ndisplay)
 
         if data is None:
             data = np.zeros((1,) * ndisplay, dtype=np.float32)
 
-        self.node.visible = not self.layer._slice.empty and self.layer.visible
+        self.node.visible = not self.slice.empty and self.layer.visible
 
         self.node.set_data(data)
 
@@ -120,10 +128,10 @@ class VispyImageLayer(VispyBaseLayer):
             overlay_visual.node.parent = self.node
         self.reset()
 
-    def _on_data_change(self):
+    def _on_data_change(self, event=None):
         node = self.node
-        data = fix_data_dtype(self.layer._data_view)
-        ndisplay = self.layer._slice_input.ndisplay
+        data = fix_data_dtype(self.slice.image.view)
+        ndisplay = self.slice.dims.ndisplay
 
         if ndisplay == 3 and self.layer.ndim == 2:
             data = np.expand_dims(data, axis=0)
@@ -142,7 +150,7 @@ class VispyImageLayer(VispyBaseLayer):
         else:
             node.set_data(data)
 
-        node.visible = not self.layer._slice.empty and self.layer.visible
+        node.visible = not self.slice.empty and self.layer.visible
 
         # Call to update order of translation values with new dims:
         self._on_matrix_change()
@@ -151,12 +159,12 @@ class VispyImageLayer(VispyBaseLayer):
     def _on_interpolation_change(self):
         self.node.interpolation = (
             self.layer.interpolation2d
-            if self.layer._slice_input.ndisplay == 2
+            if self.slice.dims.ndisplay == 2
             else self.layer.interpolation3d
         )
 
     def _on_custom_interpolation_kernel_2d_change(self):
-        if self.layer._slice_input.ndisplay == 2:
+        if self.slice.dims.ndisplay == 2:
             self.node.custom_kernel = self.layer.custom_interpolation_kernel_2d
 
     def _on_rendering_change(self):
@@ -264,7 +272,7 @@ class VispyImageLayer(VispyBaseLayer):
                         deferred=True,
                         shape=data.shape,
                         texture_size=MAX_TEXTURE_SIZE,
-                        ndisplay=self.layer._slice_input.ndisplay,
+                        ndisplay=self.slice.dims.ndisplay,
                     )
                 )
             warnings.warn(
@@ -273,14 +281,14 @@ class VispyImageLayer(VispyBaseLayer):
                     deferred=True,
                     shape=data.shape,
                     texture_size=MAX_TEXTURE_SIZE,
-                    ndisplay=self.layer._slice_input.ndisplay,
+                    ndisplay=self.slice.dims.ndisplay,
                 )
             )
             downsample = np.ceil(
                 np.divide(data.shape, MAX_TEXTURE_SIZE)
             ).astype(int)
             scale = np.ones(self.layer.ndim)
-            for i, d in enumerate(self.layer._slice_input.displayed):
+            for i, d in enumerate(self.slice.dims.displayed):
                 scale[d] = downsample[i]
             self.layer._transforms['tile2data'].scale = scale
             self._on_matrix_change()

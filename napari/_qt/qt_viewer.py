@@ -204,7 +204,7 @@ class QtViewer(QSplitter):
         self.canvas = canvas_class(
             viewer=viewer,
             parent=self,
-            canvas_model=self.viewer._canvases[0],  # AGA3 TODO
+            canvas_model=self.viewer._canvases[0],  # TODO multicanvas
             key_map_handler=self._key_map_handler,
             size=self.viewer._canvas_size,
             autoswap=get_settings().experimental.autoswap_buffers,  # see #5734

@@ -326,6 +326,7 @@ class _ImageBase(IntensityVisualizationMixin, Layer):
             iso_threshold=Event,
             attenuation=Event,
             custom_interpolation_kernel_2d=Event,
+            slice=Event,
         )
 
         self._array_like = True
@@ -792,6 +793,8 @@ class _ImageBase(IntensityVisualizationMixin, Layer):
             self._should_calc_clims = False
         elif self._keep_auto_contrast:
             self.reset_contrast_limits()
+
+        self.events.slice(slice=self._slice)
 
     def _update_thumbnail(self):
         """Update thumbnail with current image data and colormap."""

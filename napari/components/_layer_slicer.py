@@ -5,6 +5,7 @@ See the NAP for more details: https://napari.org/dev/naps/4-async-slicing.html
 
 from __future__ import annotations
 
+import itertools
 import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor, wait
 from contextlib import contextmanager
@@ -17,6 +18,7 @@ from typing import (
     Protocol,
     Tuple,
     TypeVar,
+    Union,
     runtime_checkable,
 )
 
@@ -154,7 +156,7 @@ class _LayerSlicer:
         self,
         *,
         layers: Iterable[Layer],
-        dims: Dims,
+        dims: Union[Dims, Iterable[Dims]],
         force: bool = False,
     ) -> Optional[Future[dict]]:
         """Slices the given layers with the given dims.
@@ -192,25 +194,29 @@ class _LayerSlicer:
             dims,
             force,
         )
-        if existing_task := self._find_existing_task(layers):
-            logger.debug('Cancelling task %s', id(existing_task))
-            existing_task.cancel()
+        # if existing_task := self._find_existing_task(layers):
+        #     logger.debug('Cancelling task %s', id(existing_task))
+        #     existing_task.cancel()
 
+        if not isinstance(dims, Iterable):
+            dims = [dims]
+
+        dims.reverse()
         # Not all layer types will initially be asynchronously sliceable.
         # The following logic gives us a way to handle those in the short
         # term as we develop, and also in the long term if there are cases
         # when we want to perform sync slicing anyway.
         requests = {}
-        sync_layers = []
-        for layer in layers:
+        sync_layers = set()
+        for layer, dim in itertools.product(layers, dims):
             if isinstance(layer, _AsyncSliceable) and not self._force_sync:
                 logger.debug('Making async slice request for %s', layer)
-                request = layer._make_slice_request(dims)
+                request = layer._make_slice_request(dim)
                 requests[layer] = request
                 layer._set_unloaded_slice_id(request.id)
             else:
                 logger.debug('Sync slicing for %s', layer)
-                sync_layers.append(layer)
+                sync_layers.add(layer)
 
         # First maybe submit an async slicing task to start it ASAP.
         task = None
@@ -224,10 +230,8 @@ class _LayerSlicer:
             task.add_done_callback(self._on_slice_done)
 
         # Then execute sync slicing tasks to run concurrent with async ones.
-        for layer in sync_layers:
-            layer._slice_dims(
-                dims.point, dims.ndisplay, dims.order, force=force
-            )
+        for layer, dim in itertools.product(sync_layers, dims):
+            layer._slice_dims(dim.point, dim.ndisplay, dim.order, force=force)
 
         return task
 

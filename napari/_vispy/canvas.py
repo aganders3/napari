@@ -60,6 +60,8 @@ class VispyCanvas:
     ----------
     viewer : napari.components.ViewerModel
         Napari viewer containing the rendered scene, layers, and controls.
+    canvas_model : napari.components.MultiCanvas
+        Napari MultiCanvas model containing the dims and camera
 
     Attributes
     ----------
@@ -106,6 +108,7 @@ class VispyCanvas:
         self._last_theme_color = None
         self._background_color_override = None
         self.viewer = viewer
+        self.model = canvas_model
         self._scene_canvas = NapariSceneCanvas(
             *args, keys=None, vsync=True, **kwargs
         )
@@ -561,7 +564,7 @@ class VispyCanvas:
         -------
         None
         """
-
+        vispy_layer.canvas_model = self.model
         vispy_layer.node.parent = self.view.scene
         self.layer_to_visual[napari_layer] = vispy_layer
 
@@ -569,7 +572,7 @@ class VispyCanvas:
         self.viewer.camera.events.angles.connect(vispy_layer._on_camera_move)
 
         # TODO multicanvas: this is kind of a hack, consider
-        # _add_multiple_lauyer_visual_mapping instead
+        # _add_multiple_layers_visual_mapping instead
         if reorder:
             self._reorder_layers()
 

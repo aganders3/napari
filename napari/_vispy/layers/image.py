@@ -106,6 +106,7 @@ class VispyImageLayer(VispyBaseLayer):
         if event is None or not hasattr(event, 'slice'):
             return
 
+        # TODO multicanvas: only update if the slice is for the current canvas
         self.slice = event.slice
         self._on_data_change()
 

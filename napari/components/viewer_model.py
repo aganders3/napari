@@ -117,11 +117,11 @@ DEFAULT_OVERLAYS = {
 }
 
 
+# TODO multicanvas: move this to its own file (I guess) and rename CanvasModel
 class MultiCanvas(EventedModel):
-    parent: Optional[ViewerModel] = None
+    parent: Optional[ViewerModel] = None  # TODO multicanvas: is this needed?
     camera: Camera = Field(default_factory=Camera, allow_mutation=False)
     dims: Dims = Field(default_factory=Dims, allow_mutation=False)
-    # layers: ProxyLayerList = Field(default_factory=ProxyLayerList)
 
 
 # KeymapProvider & MousemapProvider should eventually be moved off the ViewerModel
@@ -417,7 +417,9 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     def reset_view(self):
         """Reset the camera view."""
-        # TODO mutlicanvas: reset camera for each canvas as-needed? sometimes initial view is weird
+        # TODO mutlicanvas: reset camera for each canvas as-needed? sometimes
+        # initial view is weird
+        # TODO multicanvas: do we know which canvas needs to be reset?
         extent = self._sliced_extent_world_augmented
         scene_size = extent[1] - extent[0]
         corner = extent[0]
@@ -465,7 +467,9 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     def _on_layer_reload(self, event: Event) -> None:
         self._layer_slicer.submit(
-            layers=[event.layer], dims=self.dims, force=True
+            layers=[event.layer],
+            dims=[d.dims for d in self._canvases],
+            force=True,
         )
 
     def _update_layers(self, *, layers=None):
@@ -477,7 +481,10 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
             List of layers to update. If none provided updates all.
         """
         layers = layers or self.layers
-        self._layer_slicer.submit(layers=layers, dims=self.dims)
+        self._layer_slicer.submit(
+            layers=layers,
+            dims=[d.dims for d in self._canvases],
+        )
         # If the currently selected layer is sliced asynchronously, then the value
         # shown with this position may be incorrect. See the discussion for more details:
         # https://github.com/napari/napari/pull/5377#discussion_r1036280855

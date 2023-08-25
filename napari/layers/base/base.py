@@ -65,6 +65,8 @@ from napari.utils.translations import trans
 if TYPE_CHECKING:
     import numpy.typing as npt
 
+    from napari.components.viewer_model import MultiCanvas
+
 
 logger = logging.getLogger("napari.layers.base.base")
 
@@ -1116,7 +1118,12 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
         raise NotImplementedError
 
     def _slice_dims(
-        self, point=None, ndisplay=2, order=None, force: bool = False
+        self,
+        point=None,
+        ndisplay=2,
+        order=None,
+        force: bool = False,
+        canvas: MultiCanvas = None,
     ):
         """Slice data with values from a global dims model.
 
@@ -1146,7 +1153,7 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
         slice_input = self._make_slice_input(point, ndisplay, order)
         if force or (self._slice_input != slice_input):
             self._slice_input = slice_input
-            self._refresh_sync()
+            self._refresh_sync(canvas=canvas)
 
     def _make_slice_input(
         self, point=None, ndisplay=2, order=None
@@ -1366,11 +1373,11 @@ class Layer(KeymapProvider, MousemapProvider, ABC):
         else:
             self._refresh_sync()
 
-    def _refresh_sync(self, event=None):
+    def _refresh_sync(self, event=None, canvas=None):
         logger.debug('Layer._refresh_sync: %s', self)
         if self.visible:
             self.set_view_slice()
-            self.events.set_data()
+            self.events.set_data(canvas=canvas)
             self._update_thumbnail()
             self._set_highlight(force=True)
 

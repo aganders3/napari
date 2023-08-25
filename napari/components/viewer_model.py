@@ -468,7 +468,8 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
     def _on_layer_reload(self, event: Event) -> None:
         self._layer_slicer.submit(
             layers=[event.layer],
-            dims=[d.dims for d in self._canvases],
+            # dims=[d.dims for d in self._canvases],
+            canvases=self._canvases,
             force=True,
         )
 
@@ -483,7 +484,8 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         layers = layers or self.layers
         self._layer_slicer.submit(
             layers=layers,
-            dims=[d.dims for d in self._canvases],
+            canvases=self._canvases,
+            # dims=[d.dims for d in self._canvases],
         )
         # If the currently selected layer is sliced asynchronously, then the value
         # shown with this position may be incorrect. See the discussion for more details:

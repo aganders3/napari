@@ -650,7 +650,7 @@ class QtViewer(QSplitter):
         """
         responses = event.value
         logging.debug('QtViewer._on_slice_ready: %s', responses)
-        for layer, response in responses.items():
+        for layer, (response, canvas) in responses.items():
             # Update the layer slice state to temporarily support behavior
             # that depends on it.
             layer._update_slice_response(response)
@@ -660,7 +660,7 @@ class QtViewer(QSplitter):
             # The rest of `Layer.refresh` after `set_view_slice`, where
             # `set_data` notifies the corresponding vispy layer of the new
             # slice.
-            layer.events.set_data()
+            layer.events.set_data(canvas=canvas)
             layer._update_thumbnail()
             layer._set_highlight(force=True)
 

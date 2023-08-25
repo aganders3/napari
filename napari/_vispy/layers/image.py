@@ -1,3 +1,4 @@
+import logging
 import warnings
 
 import numpy as np
@@ -10,6 +11,8 @@ from napari._vispy.visuals.image import Image as ImageNode
 from napari._vispy.visuals.volume import Volume as VolumeNode
 from napari.layers.base._base_constants import Blending
 from napari.utils.translations import trans
+
+logger = logging.getLogger("napari._vispy.layers.image")
 
 
 class ImageLayerNode:
@@ -68,7 +71,6 @@ class VispyImageLayer(VispyBaseLayer):
 
         self._array_like = True
 
-        self.layer.events.slice.connect(self._on_slice)
         self.layer.events.rendering.connect(self._on_rendering_change)
         self.layer.events.depiction.connect(self._on_depiction_change)
         self.layer.events.interpolation2d.connect(
@@ -102,14 +104,6 @@ class VispyImageLayer(VispyBaseLayer):
         self.reset()
         self._on_data_change()
 
-    def _on_slice(self, event=None):
-        if event is None or not hasattr(event, 'slice'):
-            return
-
-        # TODO multicanvas: only update if the slice is for the current canvas
-        self.slice = event.slice
-        self._on_data_change()
-
     def _on_display_change(self, data=None):
         parent = self.node.parent
         self.node.parent = None
@@ -130,6 +124,18 @@ class VispyImageLayer(VispyBaseLayer):
         self.reset()
 
     def _on_data_change(self, event=None):
+        if hasattr(event, "canvas"):
+            logger.debug(
+                "_on_data_change/canvas: %s, %s",
+                id(event.canvas),
+                event.canvas is self.canvas_model,
+            )
+        if getattr(event, "canvas", None) is not getattr(
+            self, "canvas_model", None
+        ):
+            return
+
+        self.slice = self.layer._slice
         node = self.node
         data = fix_data_dtype(self.slice.image.view)
         ndisplay = self.slice.dims.ndisplay

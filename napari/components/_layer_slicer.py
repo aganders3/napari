@@ -11,6 +11,7 @@ from concurrent.futures import Executor, Future, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from threading import RLock
 from typing import (
+    TYPE_CHECKING,
     Callable,
     Dict,
     Iterable,
@@ -29,6 +30,8 @@ from napari.utils.events.event import EmitterGroup, Event
 
 logger = logging.getLogger("napari.components._layer_slicer")
 
+if TYPE_CHECKING:
+    from napari.components.viewer_model import MultiCanvas
 
 # Layers that can be asynchronously sliced must be able to make
 # a slice request that can be called and will produce a slice
@@ -156,7 +159,7 @@ class _LayerSlicer:
         self,
         *,
         layers: Iterable[Layer],
-        dims: Union[Dims, Iterable[Dims]],
+        canvases: Union[MultiCanvas, Iterable[MultiCanvas]],
         force: bool = False,
     ) -> Optional[Future[dict]]:
         """Slices the given layers with the given dims.
@@ -189,30 +192,29 @@ class _LayerSlicer:
             slice response. Or none if no async slicing tasks were submitted.
         """
         logger.debug(
-            '_LayerSlicer.submit: layers=%s, dims=%s, force=%s',
+            '_LayerSlicer.submit: layers=%s, canvases=%s, force=%s',
             layers,
-            dims,
+            canvases,
             force,
         )
         # if existing_task := self._find_existing_task(layers):
         #     logger.debug('Cancelling task %s', id(existing_task))
         #     existing_task.cancel()
 
-        if not isinstance(dims, Iterable):
-            dims = [dims]
+        if not isinstance(canvases, Iterable):
+            canvases = [canvases]
 
-        dims.reverse()
         # Not all layer types will initially be asynchronously sliceable.
         # The following logic gives us a way to handle those in the short
         # term as we develop, and also in the long term if there are cases
         # when we want to perform sync slicing anyway.
         requests = {}
         sync_layers = set()
-        for layer, dim in itertools.product(layers, dims):
+        for layer, canvas in itertools.product(layers, canvases):
             if isinstance(layer, _AsyncSliceable) and not self._force_sync:
                 logger.debug('Making async slice request for %s', layer)
-                request = layer._make_slice_request(dim)
-                requests[layer] = request
+                request = layer._make_slice_request(canvas.dims)
+                requests[layer] = (request, canvas)
                 layer._set_unloaded_slice_id(request.id)
             else:
                 logger.debug('Sync slicing for %s', layer)
@@ -230,8 +232,15 @@ class _LayerSlicer:
             task.add_done_callback(self._on_slice_done)
 
         # Then execute sync slicing tasks to run concurrent with async ones.
-        for layer, dim in itertools.product(sync_layers, dims):
-            layer._slice_dims(dim.point, dim.ndisplay, dim.order, force=force)
+        for layer, canvas in itertools.product(sync_layers, canvases):
+            dims = canvas.dims
+            layer._slice_dims(
+                dims.point,
+                dims.ndisplay,
+                dims.order,
+                force=force,
+                canvas=canvas,
+            )
 
         return task
 
@@ -258,13 +267,18 @@ class _LayerSlicer:
         ----------
         requests: dict[Layer, SliceRequest]
             Dictionary of request objects to be used for constructing the slice
+        canvas: Optional[MultiCanvas]
+            The canvas to use for slicing. If None, the default canvas will be used.
 
         Returns
         -------
         dict[Layer, SliceResponse]: which contains the results of the slice
         """
         logger.debug('_LayerSlicer._slice_layers: %s', requests)
-        result = {layer: request() for layer, request in requests.items()}
+        result = {
+            layer: (request(), canvas)
+            for layer, (request, canvas) in requests.items()
+        }
         self.events.ready(value=result)
         return result
 

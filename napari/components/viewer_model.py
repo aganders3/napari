@@ -24,7 +24,10 @@ from pydantic import Extra, Field, PrivateAttr, validator
 
 from napari import layers
 from napari.components._layer_slicer import _LayerSlicer
-from napari.components._viewer_mouse_bindings import dims_scroll
+from napari.components._viewer_mouse_bindings import (
+    change_active_canvas,
+    dims_scroll,
+)
 from napari.components.camera import Camera
 from napari.components.cursor import Cursor
 from napari.components.dims import Dims
@@ -283,6 +286,7 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
         # Add mouse callback
         self.mouse_wheel_callbacks.append(dims_scroll)
+        self.mouse_double_click_callbacks.append(change_active_canvas)
 
         self._overlays.update({k: v() for k, v in DEFAULT_OVERLAYS.items()})
 
@@ -291,8 +295,6 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
             canvas.dims.axis_labels = axis_labels
             canvas.dims.ndisplay = ndisplay
             canvas.dims.order = order
-
-        self._canvases.events.connect(self._on_canvases_change)
 
     # properties for backward compatibility
     # TODO multicanvas: camera and dims should not be mutable (tests fail)
@@ -305,6 +307,7 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         return self._canvases[0].dims
 
     def add_canvas(self):
+        # TODO multicanvas - raise an error if no layers?
         new_dims = self.dims.copy()
         new_dims.events.ndisplay.connect(self._update_layers)
         new_dims.events.ndisplay.connect(self.reset_view)
@@ -318,13 +321,6 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
                 dims=new_dims,
             )
         )
-
-    def _on_canvases_change(self, event):
-        with self.dims.events.ndisplay.blocker(self.reset_view):
-            self.dims.events.ndisplay(value=self.dims.ndisplay)
-        with self.dims.events.order.blocker(self.reset_view):
-            self.dims.events.order(value=self.dims.order)
-        self.dims.events.current_step(value=self.dims.current_step)
 
     # simple properties exposing overlays for backward compatibility
     @property
@@ -417,9 +413,9 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     def reset_view(self):
         """Reset the camera view."""
-        # TODO mutlicanvas: reset camera for each canvas as-needed? sometimes
+        # TODO mutlicanvas - reset camera for each canvas as-needed? sometimes
         # initial view is weird
-        # TODO multicanvas: do we know which canvas needs to be reset?
+        # TODO multicanvas - do we know which canvas needs to be reset?
         extent = self._sliced_extent_world_augmented
         scene_size = extent[1] - extent[0]
         corner = extent[0]
@@ -429,19 +425,22 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         size = np.multiply(scene_size, grid_size)
         center = np.add(corner, np.divide(size, 2))[-self.dims.ndisplay :]
         center = [0] * (self.dims.ndisplay - len(center)) + list(center)
-        self.camera.center = center
-        # zoom is definied as the number of canvas pixels per world pixel
-        # The default value used below will zoom such that the whole field
-        # of view will occupy 95% of the canvas on the most filled axis
-        if np.max(size) == 0:
-            self.camera.zoom = 0.95 * np.min(self._canvas_size)
-        else:
-            scale = np.array(size[-2:])
-            scale[np.isclose(scale, 0)] = 1
-            self.camera.zoom = 0.95 * np.min(
-                np.array(self._canvas_size) / scale
-            )
-        self.camera.angles = (0, 0, 90)
+
+        for canvas in self._canvases:
+            # TODO multicanvas - don't always reset all cameras
+            # TODO multicanvas - not all canvases have same size
+            cam = canvas.camera
+            cam.center = center
+            # zoom is definied as the number of canvas pixels per world pixel
+            # The default value used below will zoom such that the whole field
+            # of view will occupy 95% of the canvas on the most filled axis
+            if np.max(size) == 0:
+                cam.zoom = 0.95 * np.min(self._canvas_size)
+            else:
+                scale = np.array(size[-2:])
+                scale[np.isclose(scale, 0)] = 1
+                cam.zoom = 0.95 * np.min(np.array(self._canvas_size) / scale)
+            cam.angles = (0, 0, 90)
 
         # Emit a reset view event, which is no longer used internally, but
         # which maybe useful for building on napari.
@@ -481,11 +480,13 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         layers : list of napari.layers.Layer, optional
             List of layers to update. If none provided updates all.
         """
+        # TODO multicanvas - update only canvases that need it
         layers = layers or self.layers
         self._layer_slicer.submit(
             layers=layers,
             canvases=self._canvases,
-            # dims=[d.dims for d in self._canvases],
+            # TODO multicanvas - force if more than one canvas, can do better!
+            force=len(self._canvases) > 1,
         )
         # If the currently selected layer is sliced asynchronously, then the value
         # shown with this position may be incorrect. See the discussion for more details:
@@ -661,14 +662,16 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         # Update dims and grid model
         self._on_layers_change()
         self._on_grid_change()
-        # Slice current layer based on dims
-        self._update_layers(layers=[layer])
 
         if len(self.layers) == 1:
             # set dims slider to the middle of all dimensions
             self.reset_view()
             for canvas in self._canvases:
                 canvas.dims._go_to_center_step()
+                canvas.dims.events.current_step(value=canvas.dims.point)
+
+        # Slice current layer based on dims
+        self._update_layers(layers=[layer])
 
     @staticmethod
     def _layer_help_from_mode(layer: Layer):

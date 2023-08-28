@@ -380,6 +380,7 @@ class VispyCanvas:
         )
 
         # Add the camera zoom scale to the event
+        # TODO multicanvas - get the correct zoom
         event.camera_zoom = self.viewer.camera.zoom
 
         # Update the cursor position
@@ -394,6 +395,9 @@ class VispyCanvas:
 
         # Add the current dims indices
         event.dims_point = list(self.viewer.dims.point)
+
+        # Add the current canvas
+        event.canvas = self.model
 
         # Put a read only wrapper on the event
         event = ReadOnlyWrapper(event, exceptions=('handled',))

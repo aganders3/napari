@@ -257,6 +257,7 @@ class QtViewer(QSplitter):
 
         self.viewer._canvases.events.connect(self._multi_canvas_change)
         self.viewer._canvases.events.inserted.connect(self._on_add_canvas)
+        self.viewer._canvases.events.removed.connect(self._on_remove_canvas)
 
         self.setAcceptDrops(True)
 
@@ -325,10 +326,29 @@ class QtViewer(QSplitter):
     def _multi_canvas_change(self, event):
         old_dims = self.dims
         # TODO multicanvas - update the QtDims instead of creating a new one?
+        # viewer.dims gives the dims for the "active" canvas
         self.dims = QtDims(self.viewer.dims)
         self._main_widget.layout().replaceWidget(old_dims, self.dims)
         old_dims.stop()
         old_dims.deleteLater()
+        # TODO multicanvas - highlight the active canvas somehow
+
+    def _on_remove_canvas(self, event):
+        """Remove a canvas from the viewer.
+
+        Parameters
+        ----------
+        event : napari.utils.event.Event
+            The napari event that triggered this method.
+        """
+        removed_canvas = event.value
+        for canvas in self._canvases:
+            if canvas.model is removed_canvas:
+                # TODO multicanvas - any more cleanup needed?
+                canvas.native.parent().close()
+                self._canvases.remove(canvas)
+                break
+        self._canvas_grid.tileSubWindows()
 
     def _on_add_canvas(self, event):
         """Add a canvas to the viewer.
@@ -650,19 +670,21 @@ class QtViewer(QSplitter):
         """
         responses = event.value
         logging.debug('QtViewer._on_slice_ready: %s', responses)
-        for layer, (response, canvas) in responses.items():
-            # Update the layer slice state to temporarily support behavior
-            # that depends on it.
-            layer._update_slice_response(response)
-            # Update the layer's loaded state before everything else,
-            # because they may rely on its updated value.
-            layer._update_loaded_slice_id(response.request_id)
-            # The rest of `Layer.refresh` after `set_view_slice`, where
-            # `set_data` notifies the corresponding vispy layer of the new
-            # slice.
-            layer.events.set_data(canvas=canvas)
-            layer._update_thumbnail()
-            layer._set_highlight(force=True)
+        for layer, layer_responses in responses.items():
+            for response, canvas in layer_responses:
+                # Update the layer slice state to temporarily support behavior
+                # that depends on it.
+                layer._update_slice_response(response)
+                # Update the layer's loaded state before everything else,
+                # because they may rely on its updated value.
+                layer._update_loaded_slice_id(response.request_id)
+                # The rest of `Layer.refresh` after `set_view_slice`, where
+                # `set_data` notifies the corresponding vispy layer of the new
+                # slice.
+                layer.events.set_data(canvas=canvas, slice=response)
+                # TODO multicanvas - set thumbnail/highlight based on active canvas?
+                layer._update_thumbnail()
+                layer._set_highlight(force=True)
 
     def _on_active_change(self):
         """When active layer changes change keymap handler."""

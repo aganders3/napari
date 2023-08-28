@@ -365,10 +365,10 @@ class EventedList(TypedMutableSequence[_T]):
         self._list.reverse()
         self.events.reordered(value=self)
 
-    def shift_left(self) -> None:
+    def rotate_left(self) -> None:
         self._list.append(self._list.pop(0))
         self.events.reordered(value=self)
 
-    def shift_right(self) -> None:
+    def rotate_right(self) -> None:
         self._list.insert(0, self._list.pop())
         self.events.reordered(value=self)

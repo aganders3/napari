@@ -214,7 +214,8 @@ class _LayerSlicer:
             if isinstance(layer, _AsyncSliceable) and not self._force_sync:
                 logger.debug('Making async slice request for %s', layer)
                 request = layer._make_slice_request(canvas.dims)
-                requests[layer] = (request, canvas)
+                requests.setdefault(layer, []).append((request, canvas))
+                # requests[layer] = (request, canvas)
                 layer._set_unloaded_slice_id(request.id)
             else:
                 logger.debug('Sync slicing for %s', layer)
@@ -223,8 +224,8 @@ class _LayerSlicer:
         # First maybe submit an async slicing task to start it ASAP.
         task = None
         if len(requests) > 0:
-            logger.debug('Submitting task %s', id(task))
             task = self._executor.submit(self._slice_layers, requests)
+            logger.debug('Submitting task %s', id(task))
             # Store task before adding done callback to ensure there is always
             # a task to remove in the done callback.
             with self._lock_layers_to_task:
@@ -276,8 +277,8 @@ class _LayerSlicer:
         """
         logger.debug('_LayerSlicer._slice_layers: %s', requests)
         result = {
-            layer: (request(), canvas)
-            for layer, (request, canvas) in requests.items()
+            layer: [(request(), canvas) for request, canvas in layer_requests]
+            for layer, layer_requests in requests.items()
         }
         self.events.ready(value=result)
         return result

@@ -3,8 +3,9 @@ from __future__ import annotations
 import inspect
 import itertools
 import os
+import time
 import warnings
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -122,9 +123,13 @@ DEFAULT_OVERLAYS = {
 
 # TODO multicanvas: move this to its own file (I guess) and rename CanvasModel
 class MultiCanvas(EventedModel):
-    parent: Optional[ViewerModel] = None  # TODO multicanvas: is this needed?
+    # parent: Optional[ViewerModel] = None  # TODO multicanvas: is this needed?
     camera: Camera = Field(default_factory=Camera, allow_mutation=False)
     dims: Dims = Field(default_factory=Dims, allow_mutation=False)
+    _created: float = PrivateAttr(default_factory=time.time)
+
+    def __hash__(self):
+        return hash(id(self) + self._created)
 
 
 # KeymapProvider & MousemapProvider should eventually be moved off the ViewerModel
@@ -274,7 +279,10 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         self.dims.events.ndisplay.connect(self.reset_view)
         self.dims.events.order.connect(self._update_layers)
         self.dims.events.order.connect(self.reset_view)
-        self.dims.events.current_step.connect(self._update_layers)
+        update_layers = partial(
+            self._update_layers, canvases=[self._canvases[0]]
+        )
+        self.dims.events.current_step.connect(update_layers)
         self.cursor.events.position.connect(
             self._update_status_bar_from_cursor
         )
@@ -283,6 +291,7 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         self.layers.events.reordered.connect(self._on_grid_change)
         self.layers.events.reordered.connect(self._on_layers_change)
         self.layers.selection.events.active.connect(self._on_active_layer)
+        self._canvases.events.connect(self._on_canvases_change)
 
         # Add mouse callback
         self.mouse_wheel_callbacks.append(dims_scroll)
@@ -291,7 +300,7 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         self._overlays.update({k: v() for k, v in DEFAULT_OVERLAYS.items()})
 
         for canvas in self._canvases:
-            canvas.parent = self
+            # canvas.parent = self
             canvas.dims.axis_labels = axis_labels
             canvas.dims.ndisplay = ndisplay
             canvas.dims.order = order
@@ -308,19 +317,31 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     def add_canvas(self):
         # TODO multicanvas - raise an error if no layers?
+        # TODO multicanvas - return the canvas model?
         new_dims = self.dims.copy()
+        new_canvas = MultiCanvas(
+            # parent=self,
+            camera=self.camera.copy(),
+            dims=new_dims,
+        )
         new_dims.events.ndisplay.connect(self._update_layers)
         new_dims.events.ndisplay.connect(self.reset_view)
         new_dims.events.order.connect(self._update_layers)
         new_dims.events.order.connect(self.reset_view)
-        new_dims.events.current_step.connect(self._update_layers)
-        self._canvases.append(
-            MultiCanvas(
-                parent=self,
-                camera=self.camera.copy(),
-                dims=new_dims,
-            )
-        )
+        update_layers = partial(self._update_layers, canvases=[new_canvas])
+        new_dims.events.current_step.connect(update_layers)
+        self._canvases.append(new_canvas)
+
+    def _on_canvases_change(self, event):
+        """Emit necessary events when canvases change.
+
+        This is mostly so the layer controls widget can update.
+        """
+        with (
+            self.dims.events.ndisplay.blocker(self.reset_view),
+            self.dims.events.ndisplay.blocker(self._update_layers),
+        ):
+            self.dims.events.ndisplay(value=self.dims.ndisplay)
 
     # simple properties exposing overlays for backward compatibility
     @property
@@ -472,7 +493,7 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
             force=True,
         )
 
-    def _update_layers(self, *, layers=None):
+    def _update_layers(self, *, layers=None, canvases=None):
         """Updates the contained layers.
 
         Parameters
@@ -482,11 +503,12 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         """
         # TODO multicanvas - update only canvases that need it
         layers = layers or self.layers
+        canvases = canvases or self._canvases
         self._layer_slicer.submit(
             layers=layers,
-            canvases=self._canvases,
+            canvases=canvases,
             # TODO multicanvas - force if more than one canvas, can do better!
-            force=len(self._canvases) > 1,
+            force=len(canvases) > 1,
         )
         # If the currently selected layer is sliced asynchronously, then the value
         # shown with this position may be incorrect. See the discussion for more details:

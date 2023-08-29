@@ -197,12 +197,13 @@ class _LayerSlicer:
             canvases,
             force,
         )
-        # if existing_task := self._find_existing_task(layers):
-        #     logger.debug('Cancelling task %s', id(existing_task))
-        #     existing_task.cancel()
 
         if not isinstance(canvases, Iterable):
             canvases = [canvases]
+
+        if existing_task := self._find_existing_task(layers, canvases):
+            logger.debug('Cancelling task %s', id(existing_task))
+            existing_task.cancel()
 
         # Not all layer types will initially be asynchronously sliceable.
         # The following logic gives us a way to handle those in the short
@@ -215,7 +216,6 @@ class _LayerSlicer:
                 logger.debug('Making async slice request for %s', layer)
                 request = layer._make_slice_request(canvas.dims)
                 requests.setdefault(layer, []).append((request, canvas))
-                # requests[layer] = (request, canvas)
                 layer._set_unloaded_slice_id(request.id)
             else:
                 logger.debug('Sync slicing for %s', layer)
@@ -229,7 +229,12 @@ class _LayerSlicer:
             # Store task before adding done callback to ensure there is always
             # a task to remove in the done callback.
             with self._lock_layers_to_task:
-                self._layers_to_task[tuple(requests)] = task
+                key = tuple(
+                    (layer, canvas)
+                    for layer, layer_requests in requests.items()
+                    for _, canvas in layer_requests
+                )
+                self._layers_to_task[key] = task
             task.add_done_callback(self._on_slice_done)
 
         # Then execute sync slicing tasks to run concurrent with async ones.
@@ -312,7 +317,9 @@ class _LayerSlicer:
         return False
 
     def _find_existing_task(
-        self, layers: Iterable[Layer]
+        self,
+        layers: Iterable[Layer],
+        canvases: Iterable[MultiCanvas],
     ) -> Optional[Future[Dict]]:
         """Find the task associated with a list of layers. Returns the first
         task found for which the layers of the task are a subset of the input
@@ -322,7 +329,7 @@ class _LayerSlicer:
         is unmodified during this process.
         """
         with self._lock_layers_to_task:
-            layer_set = set(layers)
+            layer_set = set(itertools.product(layers, canvases))
             for task_layers, task in self._layers_to_task.items():
                 if set(task_layers).issubset(layer_set):
                     logger.debug('Found existing task for %s', task_layers)

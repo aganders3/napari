@@ -367,6 +367,8 @@ class QtViewer(QSplitter):
             autoswap=get_settings().experimental.autoswap_buffers,  # see #5734
         )
         self._canvases.append(canvas)
+
+        # TODO multicanvas - this steals focus from console/main window
         win = self._canvas_grid.addSubWindow(
             canvas.native, Qt.FramelessWindowHint
         )

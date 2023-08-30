@@ -22,8 +22,11 @@ from napari.components.layerlist import LayerList
 # decorated with keybindings during that process, but it is not directly needed
 # by our users and so is deleted below
 from napari.components import _viewer_key_bindings  # isort:skip
-from napari.components.viewer_model import ViewerModel  # isort:skip
+from napari.components.viewer_model import (
+    MultiCanvas,
+    ViewerModel,
+)
 
 del _viewer_key_bindings
 
-__all__ = ['Camera', 'Dims', 'LayerList', 'ViewerModel']
+__all__ = ['Camera', 'Dims', 'LayerList', 'MultiCanvas', 'ViewerModel']

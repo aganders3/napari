@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from vispy.app.backends._qt import CanvasBackendDesktop
     from vispy.app.canvas import DrawEvent, MouseEvent, ResizeEvent
 
-    from napari.components import ViewerModel
+    from napari.components import MultiCanvas, ViewerModel
     from napari.components.overlays import Overlay
     from napari.utils.events.event import Event
     from napari.utils.key_bindings import KeymapHandler
@@ -60,6 +60,8 @@ class VispyCanvas:
     ----------
     viewer : napari.components.ViewerModel
         Napari viewer containing the rendered scene, layers, and controls.
+    canvas_model : napari.components.MultiCanvas
+        Napari MultiCanvas model containing the dims and camera
 
     Attributes
     ----------
@@ -96,6 +98,7 @@ class VispyCanvas:
         self,
         viewer: ViewerModel,
         key_map_handler: KeymapHandler,
+        canvas_model: MultiCanvas,
         *args,
         **kwargs,
     ) -> None:
@@ -105,12 +108,13 @@ class VispyCanvas:
         self._last_theme_color = None
         self._background_color_override = None
         self.viewer = viewer
+        self.model = canvas_model
         self._scene_canvas = NapariSceneCanvas(
             *args, keys=None, vsync=True, **kwargs
         )
         self.view = self.central_widget.add_view(border_width=0)
         self.camera = VispyCamera(
-            self.view, self.viewer.camera, self.viewer.dims
+            self.view, canvas_model.camera, canvas_model.dims
         )
         self.layer_to_visual = {}
         self._overlay_to_visual = {}
@@ -376,6 +380,7 @@ class VispyCanvas:
         )
 
         # Add the camera zoom scale to the event
+        # TODO multicanvas - get the correct zoom
         event.camera_zoom = self.viewer.camera.zoom
 
         # Update the cursor position
@@ -390,6 +395,9 @@ class VispyCanvas:
 
         # Add the current dims indices
         event.dims_point = list(self.viewer.dims.point)
+
+        # Add the current canvas
+        event.canvas = self.model
 
         # Put a read only wrapper on the event
         event = ReadOnlyWrapper(event, exceptions=('handled',))
@@ -544,7 +552,9 @@ class VispyCanvas:
         """
         self.viewer._canvas_size = self.size
 
-    def add_layer_visual_mapping(self, napari_layer, vispy_layer) -> None:
+    def add_layer_visual_mapping(
+        self, napari_layer, vispy_layer, *, reorder=True
+    ) -> None:
         """Maps a napari layer to its corresponding vispy layer and sets the parent scene of the vispy layer.
 
         Paremeters
@@ -558,14 +568,17 @@ class VispyCanvas:
         -------
         None
         """
-
+        vispy_layer.canvas_model = self.model
         vispy_layer.node.parent = self.view.scene
         self.layer_to_visual[napari_layer] = vispy_layer
 
         napari_layer.events.visible.connect(self._reorder_layers)
         self.viewer.camera.events.angles.connect(vispy_layer._on_camera_move)
 
-        self._reorder_layers()
+        # TODO multicanvas: this is kind of a hack, consider
+        # _add_multiple_layers_visual_mapping instead
+        if reorder:
+            self._reorder_layers()
 
     def _remove_layer(self, event: Event) -> None:
         """Upon receiving event closes the Vispy visual, deletes it and reorders the still existing layers.

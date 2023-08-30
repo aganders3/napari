@@ -45,6 +45,7 @@ class VispyBaseLayer(ABC):
     def __init__(self, layer, node) -> None:
         super().__init__()
         self.events = None  # Some derived classes have events.
+        self.canvas = None
 
         self.layer = layer
         self._array_like = False

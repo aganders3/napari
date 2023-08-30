@@ -3,8 +3,9 @@ from __future__ import annotations
 import inspect
 import itertools
 import os
+import time
 import warnings
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -24,7 +25,10 @@ from pydantic import Extra, Field, PrivateAttr, validator
 
 from napari import layers
 from napari.components._layer_slicer import _LayerSlicer
-from napari.components._viewer_mouse_bindings import dims_scroll
+from napari.components._viewer_mouse_bindings import (
+    change_active_canvas,
+    dims_scroll,
+)
 from napari.components.camera import Camera
 from napari.components.cursor import Cursor
 from napari.components.dims import Dims
@@ -71,6 +75,7 @@ from napari.utils.colormaps import ensure_colormap
 from napari.utils.events import (
     Event,
     EventedDict,
+    EventedList,
     EventedModel,
     disconnect_events,
 )
@@ -114,6 +119,17 @@ DEFAULT_OVERLAYS = {
     'axes': AxesOverlay,
     'brush_circle': BrushCircleOverlay,
 }
+
+
+# TODO multicanvas: move this to its own file (I guess) and rename CanvasModel
+class MultiCanvas(EventedModel):
+    # parent: Optional[ViewerModel] = None  # TODO multicanvas: is this needed?
+    camera: Camera = Field(default_factory=Camera, allow_mutation=False)
+    dims: Dims = Field(default_factory=Dims, allow_mutation=False)
+    _created: float = PrivateAttr(default_factory=time.time)
+
+    def __hash__(self):
+        return hash(id(self) + self._created)
 
 
 # KeymapProvider & MousemapProvider should eventually be moved off the ViewerModel
@@ -171,9 +187,7 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     # Using allow_mutation=False means these attributes aren't settable and don't
     # have an event emitter associated with them
-    camera: Camera = Field(default_factory=Camera, allow_mutation=False)
     cursor: Cursor = Field(default_factory=Cursor, allow_mutation=False)
-    dims: Dims = Field(default_factory=Dims, allow_mutation=False)
     grid: GridCanvas = Field(default_factory=GridCanvas, allow_mutation=False)
     layers: LayerList = Field(
         default_factory=LayerList, allow_mutation=False
@@ -183,6 +197,15 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
     tooltip: Tooltip = Field(default_factory=Tooltip, allow_mutation=False)
     theme: str = Field(default_factory=_current_theme)
     title: str = 'napari'
+
+    # keep track of multiple canvases
+    # TODO multicanvas: make a CanvasList
+    # TODO multicanvas: make this protected from setting/deleting
+    # TODO multicanvas: make this a selectable list, keep in sync with active canvas
+    _canvases: EventedList[MultiCanvas] = PrivateAttr(
+        default_factory=lambda: EventedList([MultiCanvas()]),
+    )
+
     # private track of overlays, only expose the old ones for backward compatibility
     _overlays: EventedDict[str, Overlay] = PrivateAttr(
         default_factory=EventedDict
@@ -256,7 +279,10 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         self.dims.events.ndisplay.connect(self.reset_view)
         self.dims.events.order.connect(self._update_layers)
         self.dims.events.order.connect(self.reset_view)
-        self.dims.events.current_step.connect(self._update_layers)
+        update_layers = partial(
+            self._update_layers, canvases=[self._canvases[0]]
+        )
+        self.dims.events.current_step.connect(update_layers)
         self.cursor.events.position.connect(
             self._update_status_bar_from_cursor
         )
@@ -265,11 +291,57 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         self.layers.events.reordered.connect(self._on_grid_change)
         self.layers.events.reordered.connect(self._on_layers_change)
         self.layers.selection.events.active.connect(self._on_active_layer)
+        self._canvases.events.connect(self._on_canvases_change)
 
         # Add mouse callback
         self.mouse_wheel_callbacks.append(dims_scroll)
+        self.mouse_double_click_callbacks.append(change_active_canvas)
 
         self._overlays.update({k: v() for k, v in DEFAULT_OVERLAYS.items()})
+
+        for canvas in self._canvases:
+            # canvas.parent = self
+            canvas.dims.axis_labels = axis_labels
+            canvas.dims.ndisplay = ndisplay
+            canvas.dims.order = order
+
+    # properties for backward compatibility
+    # TODO multicanvas: camera and dims should not be mutable (tests fail)
+    @property
+    def camera(self):
+        return self._canvases[0].camera
+
+    @property
+    def dims(self):
+        return self._canvases[0].dims
+
+    def add_canvas(self):
+        # TODO multicanvas - raise an error if no layers?
+        # TODO multicanvas - return the canvas model?
+        new_dims = self.dims.copy()
+        new_canvas = MultiCanvas(
+            # parent=self,
+            camera=self.camera.copy(),
+            dims=new_dims,
+        )
+        new_dims.events.ndisplay.connect(self._update_layers)
+        new_dims.events.ndisplay.connect(self.reset_view)
+        new_dims.events.order.connect(self._update_layers)
+        new_dims.events.order.connect(self.reset_view)
+        update_layers = partial(self._update_layers, canvases=[new_canvas])
+        new_dims.events.current_step.connect(update_layers)
+        self._canvases.append(new_canvas)
+
+    def _on_canvases_change(self, event):
+        """Emit necessary events when canvases change.
+
+        This is mostly so the layer controls widget can update.
+        """
+        with (
+            self.dims.events.ndisplay.blocker(self.reset_view),
+            self.dims.events.ndisplay.blocker(self._update_layers),
+        ):
+            self.dims.events.ndisplay(value=self.dims.ndisplay)
 
     # simple properties exposing overlays for backward compatibility
     @property
@@ -362,7 +434,9 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     def reset_view(self):
         """Reset the camera view."""
-
+        # TODO mutlicanvas - reset camera for each canvas as-needed? sometimes
+        # initial view is weird
+        # TODO multicanvas - do we know which canvas needs to be reset?
         extent = self._sliced_extent_world_augmented
         scene_size = extent[1] - extent[0]
         corner = extent[0]
@@ -372,19 +446,22 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         size = np.multiply(scene_size, grid_size)
         center = np.add(corner, np.divide(size, 2))[-self.dims.ndisplay :]
         center = [0] * (self.dims.ndisplay - len(center)) + list(center)
-        self.camera.center = center
-        # zoom is definied as the number of canvas pixels per world pixel
-        # The default value used below will zoom such that the whole field
-        # of view will occupy 95% of the canvas on the most filled axis
-        if np.max(size) == 0:
-            self.camera.zoom = 0.95 * np.min(self._canvas_size)
-        else:
-            scale = np.array(size[-2:])
-            scale[np.isclose(scale, 0)] = 1
-            self.camera.zoom = 0.95 * np.min(
-                np.array(self._canvas_size) / scale
-            )
-        self.camera.angles = (0, 0, 90)
+
+        for canvas in self._canvases:
+            # TODO multicanvas - don't always reset all cameras
+            # TODO multicanvas - not all canvases have same size
+            cam = canvas.camera
+            cam.center = center
+            # zoom is definied as the number of canvas pixels per world pixel
+            # The default value used below will zoom such that the whole field
+            # of view will occupy 95% of the canvas on the most filled axis
+            if np.max(size) == 0:
+                cam.zoom = 0.95 * np.min(self._canvas_size)
+            else:
+                scale = np.array(size[-2:])
+                scale[np.isclose(scale, 0)] = 1
+                cam.zoom = 0.95 * np.min(np.array(self._canvas_size) / scale)
+            cam.angles = (0, 0, 90)
 
         # Emit a reset view event, which is no longer used internally, but
         # which maybe useful for building on napari.
@@ -410,10 +487,13 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     def _on_layer_reload(self, event: Event) -> None:
         self._layer_slicer.submit(
-            layers=[event.layer], dims=self.dims, force=True
+            layers=[event.layer],
+            # dims=[d.dims for d in self._canvases],
+            canvases=self._canvases,
+            force=True,
         )
 
-    def _update_layers(self, *, layers=None):
+    def _update_layers(self, *, layers=None, canvases=None):
         """Updates the contained layers.
 
         Parameters
@@ -421,8 +501,15 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         layers : list of napari.layers.Layer, optional
             List of layers to update. If none provided updates all.
         """
+        # TODO multicanvas - update only canvases that need it
         layers = layers or self.layers
-        self._layer_slicer.submit(layers=layers, dims=self.dims)
+        canvases = canvases or self._canvases
+        self._layer_slicer.submit(
+            layers=layers,
+            canvases=canvases,
+            # TODO multicanvas - force if more than one canvas, can do better!
+            force=len(canvases) > 1,
+        )
         # If the currently selected layer is sliced asynchronously, then the value
         # shown with this position may be incorrect. See the discussion for more details:
         # https://github.com/napari/napari/pull/5377#discussion_r1036280855
@@ -458,13 +545,15 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
 
     def _on_layers_change(self):
         if len(self.layers) == 0:
-            self.dims.ndim = 2
-            self.dims.reset()
+            for canvas in self._canvases:
+                canvas.dims.ndim = 2
+                canvas.dims.reset()
         else:
             ranges = self.layers._ranges
             # TODO: can be optimized with dims.update(), but events need fixing
-            self.dims.ndim = len(ranges)
-            self.dims.range = ranges
+            for canvas in self._canvases:
+                canvas.dims.ndim = len(ranges)
+                canvas.dims.range = ranges
 
         new_dim = self.dims.ndim
         dim_diff = new_dim - len(self.cursor.position)
@@ -514,7 +603,6 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
                 dims_displayed=list(self.dims.displayed),
                 world=True,
             )
-
             self.help = active.help
             if self.tooltip.visible:
                 self.tooltip.text = active._get_tooltip_text(
@@ -596,13 +684,16 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         # Update dims and grid model
         self._on_layers_change()
         self._on_grid_change()
-        # Slice current layer based on dims
-        self._update_layers(layers=[layer])
 
         if len(self.layers) == 1:
             # set dims slider to the middle of all dimensions
             self.reset_view()
-            self.dims._go_to_center_step()
+            for canvas in self._canvases:
+                canvas.dims._go_to_center_step()
+                canvas.dims.events.current_step(value=canvas.dims.point)
+
+        # Slice current layer based on dims
+        self._update_layers(layers=[layer])
 
     @staticmethod
     def _layer_help_from_mode(layer: Layer):
@@ -1468,6 +1559,9 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
                 )
             ) from exc
         return layer if isinstance(layer, list) else [layer]
+
+
+MultiCanvas.update_forward_refs()
 
 
 def _normalize_layer_data(data: LayerData) -> FullLayerData:

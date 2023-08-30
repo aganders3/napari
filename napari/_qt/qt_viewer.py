@@ -11,7 +11,14 @@ from weakref import WeakSet, ref
 
 from qtpy.QtCore import QCoreApplication, QObject, Qt
 from qtpy.QtGui import QGuiApplication
-from qtpy.QtWidgets import QFileDialog, QSplitter, QVBoxLayout, QWidget
+from qtpy.QtWidgets import (
+    QFileDialog,
+    QMdiArea,
+    QSizeGrip,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 from superqt import ensure_main_thread
 
 from napari._qt.containers import QtLayerList
@@ -193,30 +200,48 @@ class QtViewer(QSplitter):
         self._dockPerformance = None
 
         # This dictionary holds the corresponding vispy visual for each layer
+        self._canvas_class = canvas_class
         self.canvas = canvas_class(
             viewer=viewer,
             parent=self,
+            canvas_model=self.viewer._canvases[0],  # TODO multicanvas
             key_map_handler=self._key_map_handler,
             size=self.viewer._canvas_size,
             autoswap=get_settings().experimental.autoswap_buffers,  # see #5734
         )
+        self._canvases = [self.canvas]
 
         # Stacked widget to provide a welcome page
         self._welcome_widget = QtWidgetOverlay(self, self.canvas.native)
+        self._welcome_widget.addWidget(QSizeGrip(self.canvas.native))
         self._welcome_widget.set_welcome_visible(show_welcome_screen)
         self._welcome_widget.sig_dropped.connect(self.dropEvent)
         self._welcome_widget.leave.connect(self._leave_canvas)
         self._welcome_widget.enter.connect(self._enter_canvas)
 
+        self._canvas_grid = QMdiArea()
+        # self._canvas_grid.setViewMode(QMdiArea.TabbedView)
+        # resizable_welcome_layout = QVBoxLayout(self._welcome_widget)
+        # resizable_welcome_layout.setContentsMargins(0, 0, 0, 0)
+        # resizable_welcome_layout.addWidget(QSizeGrip(self._welcome_widget))
+        # resizable_welcome_widget = QWidget()
+        # resizable_welcome_widget.setLayout(resizable_welcome_layout)
+        # win = self._canvas_grid.addSubWindow(resizable_welcome_widget, Qt.FramelessWindowHint)
+        win = self._canvas_grid.addSubWindow(
+            self._welcome_widget, Qt.FramelessWindowHint
+        )
+        win.showMaximized()
+
         main_widget = QWidget()
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 2, 0, 2)
-        main_layout.addWidget(self._welcome_widget)
+        main_layout.addWidget(self._canvas_grid)
         main_layout.addWidget(self.dims)
         main_layout.setSpacing(0)
         main_widget.setLayout(main_layout)
 
         self.setOrientation(Qt.Orientation.Vertical)
+        self._main_widget = main_widget
         self.addWidget(main_widget)
 
         self.viewer._layer_slicer.events.ready.connect(self._on_slice_ready)
@@ -229,6 +254,10 @@ class QtViewer(QSplitter):
         )
 
         self.viewer.layers.events.inserted.connect(self._on_add_layer_change)
+
+        self.viewer._canvases.events.connect(self._multi_canvas_change)
+        self.viewer._canvases.events.inserted.connect(self._on_add_canvas)
+        self.viewer._canvases.events.removed.connect(self._on_remove_canvas)
 
         self.setAcceptDrops(True)
 
@@ -293,6 +322,65 @@ class QtViewer(QSplitter):
             ),
             DeprecationWarning,
         )
+
+    def _multi_canvas_change(self, event):
+        old_dims = self.dims
+        # TODO multicanvas - update the QtDims instead of creating a new one?
+        # viewer.dims gives the dims for the "active" canvas
+        self.dims = QtDims(self.viewer.dims)
+        self._main_widget.layout().replaceWidget(old_dims, self.dims)
+        old_dims.stop()
+        old_dims.deleteLater()
+        # TODO multicanvas - highlight the active canvas somehow
+
+    def _on_remove_canvas(self, event):
+        """Remove a canvas from the viewer.
+
+        Parameters
+        ----------
+        event : napari.utils.event.Event
+            The napari event that triggered this method.
+        """
+        removed_canvas = event.value
+        for canvas in self._canvases:
+            if canvas.model is removed_canvas:
+                # TODO multicanvas - any more cleanup needed?
+                canvas.native.parent().close()
+                self._canvases.remove(canvas)
+                break
+        self._canvas_grid.tileSubWindows()
+
+    def _on_add_canvas(self, event):
+        """Add a canvas to the viewer.
+
+        Parameters
+        ----------
+        event : napari.utils.event.Event
+            The napari event that triggered this method.
+        """
+        canvas = self._canvas_class(
+            viewer=self.viewer,
+            parent=self,
+            canvas_model=event.value,
+            key_map_handler=KeymapHandler(),
+            size=self.viewer._canvas_size,
+            autoswap=get_settings().experimental.autoswap_buffers,  # see #5734
+        )
+        self._canvases.append(canvas)
+
+        # TODO multicanvas - this steals focus from console/main window
+        win = self._canvas_grid.addSubWindow(
+            canvas.native, Qt.FramelessWindowHint
+        )
+        win.showMaximized()
+        self._canvas_grid.tileSubWindows()
+
+        # re-add all layers since they may not have been added to the canvas
+        # _add_layer handles skipping layers that are already on the canvas
+        for layer in self.viewer.layers:
+            vispy_layer = create_vispy_layer(layer)
+            canvas.add_layer_visual_mapping(layer, vispy_layer, reorder=False)
+        canvas._reorder_layers()
 
     @staticmethod
     def _update_dask_cache_settings(
@@ -584,19 +672,21 @@ class QtViewer(QSplitter):
         """
         responses = event.value
         logging.debug('QtViewer._on_slice_ready: %s', responses)
-        for layer, response in responses.items():
-            # Update the layer slice state to temporarily support behavior
-            # that depends on it.
-            layer._update_slice_response(response)
-            # Update the layer's loaded state before everything else,
-            # because they may rely on its updated value.
-            layer._update_loaded_slice_id(response.request_id)
-            # The rest of `Layer.refresh` after `set_view_slice`, where
-            # `set_data` notifies the corresponding vispy layer of the new
-            # slice.
-            layer.events.set_data()
-            layer._update_thumbnail()
-            layer._set_highlight(force=True)
+        for layer, layer_responses in responses.items():
+            for response, canvas in layer_responses:
+                # Update the layer slice state to temporarily support behavior
+                # that depends on it.
+                layer._update_slice_response(response)
+                # Update the layer's loaded state before everything else,
+                # because they may rely on its updated value.
+                layer._update_loaded_slice_id(response.request_id)
+                # The rest of `Layer.refresh` after `set_view_slice`, where
+                # `set_data` notifies the corresponding vispy layer of the new
+                # slice.
+                layer.events.set_data(canvas=canvas, slice=response)
+                # TODO multicanvas - set thumbnail/highlight based on active canvas?
+                layer._update_thumbnail()
+                layer._set_highlight(force=True)
 
     def _on_active_change(self):
         """When active layer changes change keymap handler."""
@@ -625,21 +715,26 @@ class QtViewer(QSplitter):
         layer : napari.layers.Layer
             Layer to be added.
         """
-        vispy_layer = create_vispy_layer(layer)
+        for canvas in self._canvases:
+            # don't add a visual if it's already there
+            if layer in canvas.layer_to_visual:
+                continue
 
-        # QtPoll is experimental.
-        if self._qt_poll is not None:
-            # QtPoll will call VipyBaseImage._on_poll() when the camera
-            # moves or the timer goes off.
-            self._qt_poll.events.poll.connect(vispy_layer._on_poll)
+            vispy_layer = create_vispy_layer(layer)
 
-            # In the other direction, some visuals need to tell QtPoll to
-            # start polling. When they receive new data they need to be
-            # polled to load it, even if the camera is not moving.
-            if vispy_layer.events is not None:
-                vispy_layer.events.loaded.connect(self._qt_poll.wake_up)
+            # QtPoll is experimental.
+            if self._qt_poll is not None:
+                # QtPoll will call VipyBaseImage._on_poll() when the camera
+                # moves or the timer goes off.
+                self._qt_poll.events.poll.connect(vispy_layer._on_poll)
 
-        self.canvas.add_layer_visual_mapping(layer, vispy_layer)
+                # In the other direction, some visuals need to tell QtPoll to
+                # start polling. When they receive new data they need to be
+                # polled to load it, even if the camera is not moving.
+                if vispy_layer.events is not None:
+                    vispy_layer.events.loaded.connect(self._qt_poll.wake_up)
+
+            canvas.add_layer_visual_mapping(layer, vispy_layer)
 
     def _save_layers_dialog(self, selected=False):
         """Save layers (all or selected) to disk, using ``LayerList.save()``.

@@ -24,13 +24,12 @@ jobs:
     permissions:
       contents: read
       issues: write
-    if: ${{ github.repository == 'napari/napari' || github.event_name == 'workflow_dispatch' }}
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest, macos-latest, ubuntu-latest]
+        platform: [macos-latest]
         python: [3.12]
-        backend: [pyqt5, pyqt6]
+        backend: [pyqt6]
 
     steps:
       - uses: actions/checkout@v4

@@ -51,9 +51,11 @@ def test_toggle_axes_scale_bar_attr(
 @skip_local_popups
 def test_toggle_fullscreen(make_napari_viewer):
     """Test toggle fullscreen action."""
-    # action_id = 'napari.window.view.toggle_fullscreen'
-    # app = get_app()
+    action_id = 'napari.window.view.toggle_fullscreen'
+    app = get_app()
     viewer = make_napari_viewer(show=True)
+    if app:
+        assert action_id in app.commands
 
     # Check initial default state (no fullscreen)
     assert not viewer.window._qt_window._fullscreen_flag

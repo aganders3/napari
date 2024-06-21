@@ -130,11 +130,11 @@ def test_toggle_play(make_napari_viewer, qtbot):
     data = np.random.random((10, 10, 15))
     viewer.add_image(data)
     # Assert action triggers play
-    # app.commands.execute_command(action_id)
-    # qtbot.waitUntil(_is_playing)
+    app.commands.execute_command(action_id)
+    qtbot.waitUntil(_is_playing)
     # Assert action stops play
-    # app.commands.execute_command(action_id)
-    # qtbot.waitUntil(_is_not_playing)
+    app.commands.execute_command(action_id)
+    qtbot.waitUntil(_is_not_playing)
 
 
 @skip_local_popups

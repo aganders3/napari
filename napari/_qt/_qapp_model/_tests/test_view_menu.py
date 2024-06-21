@@ -113,12 +113,6 @@ def test_toggle_play(make_napari_viewer, qtbot):
     app = get_app()
     viewer = make_napari_viewer()
 
-    def _is_playing():
-        return viewer.window._qt_viewer.dims.is_playing
-
-    def _is_not_playing():
-        return not viewer.window._qt_viewer.dims.is_playing
-
     # Check action on empty viewer
     with pytest.warns(
         expected_warning=UserWarning, match='Refusing to play a hidden axis'
@@ -131,10 +125,10 @@ def test_toggle_play(make_napari_viewer, qtbot):
     viewer.add_image(data)
     # Assert action triggers play
     app.commands.execute_command(action_id)
-    qtbot.waitUntil(_is_playing)
+    qtbot.waitUntil(lambda: viewer.window._qt_viewer.dims.is_playing)
     # Assert action stops play
     app.commands.execute_command(action_id)
-    qtbot.waitUntil(_is_not_playing)
+    qtbot.waitUntil(lambda: not viewer.window._qt_viewer.dims.is_playing)
 
 
 @skip_local_popups

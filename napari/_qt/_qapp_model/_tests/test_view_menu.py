@@ -56,15 +56,15 @@ def test_toggle_fullscreen(make_napari_viewer):
     viewer = make_napari_viewer(show=True)
 
     # Check initial default state (no fullscreen)
-    assert not viewer.window._qt_window._is_fullscreen
+    assert not viewer.window._qt_window._fullscreen_flag
 
     # Check fullscreen state change
     app.commands.execute_command(action_id)
-    assert viewer.window._qt_window._is_fullscreen
+    assert viewer.window._qt_window._fullscreen_flag
 
     # Check return to non fullscreen state
     app.commands.execute_command(action_id)
-    assert not viewer.window._qt_window._is_fullscreen
+    assert not viewer.window._qt_window._fullscreen_flag
 
 
 @skip_local_focus

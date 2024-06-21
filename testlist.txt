@@ -1,5 +1,3 @@
 napari/_qt/_qapp_model/_tests/test_view_menu.py::test_toggle_fullscreen
 napari/_qt/_qapp_model/_tests/test_view_menu.py::test_toggle_play
-napari/_qt/_qapp_model/_tests/test_view_menu.py::test_toggle_activity_dock
-napari/_qt/_qapp_model/_tests/test_view_menu.py::test_toggle_layer_tooltips
 napari/_qt/_tests/test_qt_viewer.py::test_qt_viewer_console_focus

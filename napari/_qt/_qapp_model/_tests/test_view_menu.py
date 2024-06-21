@@ -56,15 +56,15 @@ def test_toggle_fullscreen(make_napari_viewer):
     viewer = make_napari_viewer(show=True)
 
     # Check initial default state (no fullscreen)
-    assert not viewer.window._qt_window._fullscreen_flag
+    assert not viewer.window._qt_window.isFullScreen()
 
     # Check fullscreen state change
     app.commands.execute_command(action_id)
-    assert viewer.window._qt_window._fullscreen_flag
+    assert viewer.window._qt_window.isFullScreen()
 
     # Check return to non fullscreen state
     app.commands.execute_command(action_id)
-    assert not viewer.window._qt_window._fullscreen_flag
+    assert not viewer.window._qt_window.isFullScreen()
 
 
 @skip_local_focus
@@ -113,11 +113,17 @@ def test_toggle_play(make_napari_viewer, qtbot):
     app = get_app()
     viewer = make_napari_viewer()
 
+    def _is_playing():
+        return viewer.window._qt_viewer.dims.is_playing
+
+    def _is_not_playing():
+        return not viewer.window._qt_viewer.dims.is_playing
+
     # Check action on empty viewer
-    # with pytest.warns(
-    #     expected_warning=UserWarning, match='Refusing to play a hidden axis'
-    # ):
-    #     app.commands.execute_command(action_id)
+    with pytest.warns(
+        expected_warning=UserWarning, match='Refusing to play a hidden axis'
+    ):
+        app.commands.execute_command(action_id)
 
     # Check action on viewer with layer
     np.random.seed(0)
@@ -125,10 +131,10 @@ def test_toggle_play(make_napari_viewer, qtbot):
     viewer.add_image(data)
     # Assert action triggers play
     app.commands.execute_command(action_id)
-    qtbot.waitUntil(lambda: viewer.window._qt_viewer.dims.is_playing)
+    qtbot.waitUntil(_is_playing)
     # Assert action stops play
     app.commands.execute_command(action_id)
-    qtbot.waitUntil(lambda: not viewer.window._qt_viewer.dims.is_playing)
+    qtbot.waitUntil(_is_not_playing)
 
 
 @skip_local_popups

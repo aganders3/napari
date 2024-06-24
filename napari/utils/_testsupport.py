@@ -232,6 +232,7 @@ def make_napari_viewer(
     >>> def test_something_with_strict_qt_tests(make_napari_viewer):
     ...     viewer = make_napari_viewer(strict_qt=True)
     """
+    from qtpy.QtCore.Qt import FocusPolicy
     from qtpy.QtWidgets import QApplication, QWidget
 
     from napari import Viewer
@@ -286,6 +287,7 @@ def make_napari_viewer(
 
         def _dummy_widget(*_):
             w = QWidget()
+            w.setFocusPolicy(FocusPolicy.StrongFocus)
             w._update_theme = _empty
             return w
 

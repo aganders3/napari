@@ -61,7 +61,10 @@ def get_max_texture_sizes() -> tuple[int, int]:
     with _opengl_context():
         max_size_2d = gl.glGetParameter(gl.GL_MAX_TEXTURE_SIZE)
 
-    if max_size_2d == ():
+    # glGetParameter may return empty tuple or empty array depending on backend
+    if (isinstance(max_size_2d, tuple) and len(max_size_2d) == 0) or (
+        isinstance(max_size_2d, np.ndarray) and max_size_2d.size == 0
+    ):
         max_size_2d = None
 
     # vispy/gloo doesn't provide the GL_MAX_3D_TEXTURE_SIZE location,
@@ -71,7 +74,10 @@ def get_max_texture_sizes() -> tuple[int, int]:
         GL_MAX_3D_TEXTURE_SIZE = 32883
         max_size_3d = gl.glGetParameter(GL_MAX_3D_TEXTURE_SIZE)
 
-    if max_size_3d == ():
+    # glGetParameter may return empty tuple or empty array depending on backend
+    if (isinstance(max_size_3d, tuple) and len(max_size_3d) == 0) or (
+        isinstance(max_size_3d, np.ndarray) and max_size_3d.size == 0
+    ):
         max_size_3d = None
 
     return max_size_2d, max_size_3d

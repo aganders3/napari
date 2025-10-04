@@ -1,7 +1,9 @@
 import logging
 
 from qtpy import API_NAME
-from vispy import app
+from vispy import app, use
+
+use(gl='gl+')
 
 # set vispy application to the appropriate qt backend
 app.use_app(API_NAME)

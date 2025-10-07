@@ -3,7 +3,12 @@ import logging
 from qtpy import API_NAME
 from vispy import app, use
 
-use(gl='gl+')
+GL_PLUS = True
+try:
+    use(gl='gl+')
+except RuntimeError:
+    GL_PLUS = False
+    use(gl='gl2')
 
 # set vispy application to the appropriate qt backend
 app.use_app(API_NAME)
@@ -28,6 +33,7 @@ from napari._vispy.utils.quaternion import quaternion2euler_degrees
 from napari._vispy.utils.visual import create_vispy_layer, create_vispy_overlay
 
 __all__ = [
+    'GL_PLUS',
     'VispyAxesOverlay',
     'VispyCamera',
     'VispyCanvas',

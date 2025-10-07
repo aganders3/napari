@@ -1,9 +1,11 @@
 from vispy.scene.visuals import Markers as BaseMarkers
 
+from napari._vispy import GL_PLUS
+
 
 class Markers(BaseMarkers):
     def __init__(self, *args, **kwargs) -> None:
-        kwargs.setdefault('method', 'instanced')
+        kwargs.setdefault('method', 'instanced' if GL_PLUS else 'points')
         super().__init__(*args, **kwargs)
         self.canvas_size_limits = 0, 10000
 

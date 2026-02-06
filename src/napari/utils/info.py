@@ -9,7 +9,6 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import napari
-from napari.settings import get_settings
 
 OS_RELEASE_PATH = '/etc/os-release'
 
@@ -150,6 +149,7 @@ def get_plugin_list() -> str:
 def startup_script() -> str:
     """Get information about the startup script if executed."""
 
+    from napari.settings import get_settings
     from napari.utils._startup_script import startup_script_status_info
 
     if startup_script_status_info is None:
@@ -193,7 +193,7 @@ def sys_info(as_html: bool = False) -> str:
     try:
         from qtpy import API_NAME, PYQT_VERSION, PYSIDE_VERSION, QtCore
 
-        if API_NAME in {'PySide2', 'PySide6'}:
+        if API_NAME == 'PySide6':
             API_VERSION = PYSIDE_VERSION
         elif API_NAME in {'PyQt5', 'PyQt6'}:
             API_VERSION = PYQT_VERSION

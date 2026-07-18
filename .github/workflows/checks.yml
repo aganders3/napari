@@ -1,15 +1,27 @@
-# Our minimal suite of tests that run on each pull request
-name: PR Test
+# Non-test CI checks consolidated from the former "PR Test"
+# (test_pull_requests.yml) and "Comprehensive Test" (test_comprehensive.yml)
+# workflows, whose tox-based test matrices moved to test.yml:
+#   * on pull_request: import-lint, check-manifest, i18n syntax, PR benchmarks
+#   * on push to main: mirror main -> napari-bot
+name: Checks
 
 on:
   pull_request:
     branches:
       - main
       - "v*x"
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
 
 concurrency:
-  group: test-${{ github.ref }}
-  cancel-in-progress: true
+  group: checks-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 env:
   COLUMNS: 120
@@ -17,6 +29,7 @@ env:
 jobs:
   import_lint:
     name: Import lint
+    if: github.event_name == 'pull_request'
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -37,6 +50,7 @@ jobs:
   manifest:
     # make sure all necessary files will be bundled in the release
     name: Check Manifest
+    if: github.event_name == 'pull_request'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -51,9 +65,7 @@ jobs:
       - name: Install Dependencies
         run: pip install --upgrade pip
       - name: Install Napari dev
-        run: pip install -e .  --group build
-        env:
-          PIP_CONSTRAINT: resources/constraints/constraints_py3.14.txt
+        run: pip install -e . --group build
       - name: Make Typestubs
         run: |
           make typestubs
@@ -62,8 +74,8 @@ jobs:
           make check-manifest
 
   localization_syntax:
-    # make sure all necessary files will be bundled in the release
     name: Check l18n syntax
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -80,147 +92,10 @@ jobs:
           semgrep --error --lang python --pattern 'trans._(f"...")' src/napari
           semgrep --error --lang python --pattern "trans._(\$X.format(...))" src/napari
 
-  build_wheel:
-    name: Build wheel
-    uses: ./.github/workflows/reusable_build_wheel.yml
-
-  test_initial:
-    name: Initial test
-    uses: ./.github/workflows/reusable_run_tox_test.yml
-    needs: build_wheel
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - python: "3.11"
-            platform: ubuntu-latest
-            backend: pyqt5
-            coverage: no_cov
-            min_req: ""
-          - python: "3.14"
-            platform: ubuntu-latest
-            backend: pyqt6
-            coverage: no_cov
-            min_req: ""
-    with:
-      python_version: ${{ matrix.python }}
-      platform: ${{ matrix.platform }}
-      qt_backend: ${{ matrix.backend }}
-      coverage: ${{ matrix.coverage }}
-      min_req: ${{ matrix.MIN_REQ }}
-      artifacts_suffix: "initial"
-
-  test:
-    name: ${{ matrix.platform }}
-    uses: ./.github/workflows/reusable_run_tox_test.yml
-    needs: test_initial
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ ubuntu-latest ]
-        python: [ "3.14" ]
-        backend: [ "pyqt5,pyqt6" ]
-        coverage: [ cov ]
-        include:
-          # when changing these, try to keep full coverage of supported
-          # python versions so we test at least once everywhere
-          - python: "3.11"
-            platform: windows-latest
-            backend: pyqt5
-            coverage: no_cov
-          - python: "3.14"
-            platform: windows-latest
-            backend: pyqt6
-            coverage: cov
-          - python: "3.14"
-            platform: macos-15-intel
-            backend: pyqt5_no_numba
-            coverage: no_cov
-            timeout-minutes: 60
-          - python: "3.14"
-            platform: macos-15
-            backend: pyqt6
-            coverage: no_cov
-            timeout-minutes: 60
-          # minimum specified requirements
-          - python: "3.11"
-            platform: ubuntu-22.04
-            backend: pyqt5
-            MIN_REQ: 1
-            coverage: cov
-          # [all] extras
-          - python: "3.13"
-            platform: ubuntu-22.04
-            backend: pyqt6
-            coverage: cov
-            tox_extras: "all_optional"
-          # test without any Qt backends
-          - python: "3.12"
-            platform: ubuntu-22.04
-            backend: headless
-            coverage: no_cov
-          # test with torch
-          - python: "3.11"
-            platform: ubuntu-latest
-            backend: pyqt6
-            coverage: cov
-            tox_extras: "testing_extra"
-          # test with no numba
-          - python: "3.14"
-            platform: ubuntu-latest
-            backend: pyqt6_no_numba
-            coverage: cov
-          # pyside6 test
-          - python: "3.14"
-            platform: ubuntu-latest
-            backend: pyside6
-            coverage: cov
-          # linux aarch64 test
-          - python: "3.14"
-            platform: ubuntu-24.04-arm
-            backend: pyqt6
-            coverage: cov
-    with:
-      python_version: ${{ matrix.python }}
-      platform: ${{ matrix.platform }}
-      qt_backend: ${{ matrix.backend }}
-      min_req: ${{ matrix.MIN_REQ }}
-      coverage: ${{ matrix.coverage }}
-      tox_extras: ${{ matrix.tox_extras }}
-      timeout: ${{ matrix.timeout-minutes || 40 }}
-
-
-  test_pip_install:
-    needs: test_initial
-    name: pip install
-    uses: ./.github/workflows/reusable_pip_test.yml
-
-  test_examples:
-    name: test examples
-    uses: ./.github/workflows/reusable_run_tox_test.yml
-    needs: test_initial
-    with:
-        toxenv: py312-linux-pyqt6-examples-cov
-        timeout: 60
-        python_version: 3.12
-        constraints_suffix: _examples
-        coverage: cov
-
-  coverage_report:
-    if: ${{ always() }}
-    secrets: inherit
-    needs:
-      - test
-      - test_examples
-    uses: napari/shared-workflows/.github/workflows/upload_coverage.yml@main
-    with:
-      artifact-pattern: 'coverage reports*'
-
-
-  test_benchmarks:
-    name: test benchmarks
+  benchmarks:
+    name: PR benchmarks
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    needs: test_initial
     timeout-minutes: 60
     env:
       GIT_LFS_SKIP_SMUDGE: 1
@@ -288,3 +163,32 @@ jobs:
         with:
           name: triangulation-benchmarks
           path: /tmp/napari*
+
+  synchronize_bot_repository:
+    name: Synchronize bot repository
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.repository == 'napari/napari'
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          token: ${{ secrets.GHA_TOKEN_BOT_REPO_WORKFLOW }}
+          # explicitly set persist-credentials: 'true' to push changes to bot repo
+          persist-credentials: true
+      - name: Synchronize bot repository
+        run: |
+          git remote add napari-bot https://github.com/napari-bot/napari.git
+          git fetch napari-bot
+          git push --force --set-upstream napari-bot main
+      - name: Report Failures
+        if: ${{ failure() }}
+        uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+          TITLE: '[bot-repo] bot repo update is failing'
+        with:
+          filename: .github/BOT_REPO_UPDATE_FAIL_TEMPLATE.md
+          update_existing: true

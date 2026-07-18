@@ -1,0 +1,56 @@
+# Minimum-requirements test: install napari's declared lowest supported
+# dependency versions (via the tox-min-req plugin) and run the suite. Kept on
+# tox for now — moving MIN_REQ into the pixi flow needs napari's deps to declare
+# lower bounds so `uv --resolution lowest-direct` resolves them (see pixi.toml).
+name: Min-req Test
+
+on:
+  pull_request:
+    branches:
+      - main
+      - "v*x"
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: min-req-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  COLUMNS: 120
+
+jobs:
+  min-req:
+    name: py3.11 pyqt5 min-req
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0  # setuptools_scm needs full history/tags
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Setup headless display
+        uses: pyvista/setup-headless-display-action@5bc8de3bc71fcda7a96439571287a554901541a0 # v4.3
+        with:
+          qt: true
+          wm: herbstluftwm
+      - name: Disable ptrace security restrictions
+        run: echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+      - name: Install tox
+        run: |
+          pip install --upgrade pip
+          pip install tox tox-min-req
+      - name: Run tests (minimum requirements)
+        run: python -m tox run -e py311-linux-pyqt5-no_cov
+        env:
+          MIN_REQ: 1

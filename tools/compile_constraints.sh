@@ -118,8 +118,7 @@ pyproject_toml="pyproject.toml"
 constraints="resources/constraints"
 flags=(--quiet --extra pyqt6 --extra pyside6 --extra testing --group testing_extra --extra all_optional --exclude ${constraints}/napari_exclude.txt)
 
-# The per-Python test constraints (constraints_py3.*.txt) and the examples
-# constraints were retired when CI test environments moved to pixi (pixi.lock).
-# Only the docs and mypy constraints remain in use (build_docs.yml, test_typing.yml).
+# The per-Python test constraints, examples, and mypy constraints were retired
+# when CI moved to pixi (test envs + mypy via pixi.lock). Only the docs
+# constraint remains in use (build_docs.yml).
 uv pip compile --python-version 3.12 --output-file ${constraints}/constraints_py3.12_docs.txt "${upgrade_flag[@]}" ${pyproject_toml} ${constraints}/version_denylist.txt ${constraints}/version_denylist_examples.txt --group docs "${flags[@]}"
-uv pip compile --python-version 3.14 --output-file resources/requirements_mypy.txt "${upgrade_flag[@]}" resources/requirements_mypy.in

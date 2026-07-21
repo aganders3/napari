@@ -7,7 +7,7 @@ typestubs:
 # dmypy run -- ...
 # https://mypy.readthedocs.io/en/stable/mypy_daemon.html
 typecheck:
-	tox -e mypy
+	pixi run -e typing mypy
 
 check-manifest:
 	pip install -U check-manifest

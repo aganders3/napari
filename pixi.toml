@@ -109,6 +109,26 @@ _strip-qt = "python -m pip uninstall -y pytest-qt qtpy"
 # equivalent (it floors napari's many *unbounded* deps to broken ancient
 # versions, e.g. aiohttp 0.1); moving it here needs deps to declare lower bounds.
 
+# Type-checking profile (replaces the tox `mypy` env): the mypy toolchain + the
+# typing deps napari needs to type-check, WITHOUT installing napari itself
+# (mypy analyses src/napari directly).
+[feature.typing]
+platforms = ["linux-64", "osx-arm64", "win-64"]  # CI is linux; others let devs run mypy locally
+[feature.typing.pypi-dependencies]
+mypy = "*"
+magicgui = "*"
+app-model = "*"
+npe2 = "*"
+pydantic = "*"
+qtpy = "*"
+pyqt6 = "*"
+numpy = "!=2.2.0,!=2.2.1,!=2.2.2,!=2.2.3"
+types-PyYAML = "*"
+types-setuptools = "*"
+types-requests = "*"
+[feature.typing.tasks]
+mypy = "mypy --config-file pyproject.toml --pretty --show-error-codes src/napari"
+
 # Shared test tasks
 # Profiles that define their own `test` task (headless-test / examples-test) are
 # never combined with this feature, so the task name does not collide.
@@ -141,3 +161,6 @@ test-py312-headless = ["py312", "headless-test"]
 
 # Examples suite
 test-py312-examples = ["py312", "examples-test"]
+
+# Type checking (mypy) — replaces the tox `mypy` env
+typing = ["py312", "typing"]

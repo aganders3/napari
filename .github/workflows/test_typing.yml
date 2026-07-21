@@ -9,6 +9,9 @@ concurrency:
   group: typing-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   mypy:
     runs-on: ubuntu-latest
@@ -16,13 +19,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
         with:
-          python-version: "3.12"
-          cache-dependency-path: pyproject.toml
-      - name: Install tox
-        run: |
-          pip install tox
-
+          environments: typing
+          frozen: true
+          cache: true
       - name: Run mypy on typed modules
-        run: tox -e mypy
+        run: pixi run --frozen -e typing mypy

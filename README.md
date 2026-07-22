@@ -15,7 +15,7 @@
 [![Development Status](https://img.shields.io/pypi/status/napari.svg)](https://en.wikipedia.org/wiki/Software_release_life_cycle#Beta)
 [![SPEC 0 — Minimum Supported Dependencies](https://img.shields.io/badge/SPEC-0%20(aspiring!)-green?labelColor=%23004811&color=%235CA038)](https://scientific-python.org/specs/spec-0000/)
 [![EffVer Versioning](https://img.shields.io/badge/version_scheme-EffVer-0097a7)](https://jacobtomlinson.dev/effver)
-[![Comprehensive Test](https://github.com/napari/napari/actions/workflows/test_comprehensive.yml/badge.svg)](https://github.com/napari/napari/actions/workflows/test_comprehensive.yml)
+[![Tests](https://github.com/napari/napari/actions/workflows/tests.yml/badge.svg)](https://github.com/napari/napari/actions/workflows/tests.yml)
 [![Code coverage](https://codecov.io/gh/napari/napari/branch/main/graph/badge.svg)](https://codecov.io/gh/napari/napari)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 

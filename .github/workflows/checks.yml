@@ -105,11 +105,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: 3.12
-          cache-dependency-path: pyproject.toml
-
       - name: Setup headless display
         uses: pyvista/setup-headless-display-action@5bc8de3bc71fcda7a96439571287a554901541a0 # v4.3
         with:
@@ -132,30 +127,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install "asv[virtualenv]"
-        env:
-          PIP_CONSTRAINT: resources/constraints/benchmark.txt
+      - name: Set up pixi (provides asv)
+        uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
+        with:
+          environments: benchmarks
+          frozen: true
+          cache: true
 
       - name: asv machine
-        run: asv machine --yes
+        run: pixi run --frozen -e benchmarks asv machine --yes
 
       - name: Run benchmarks PR
         run: |
-          asv run --show-stderr --quick  --attribute timeout=300 HEAD^!
+          pixi run --frozen -e benchmarks asv run --show-stderr --quick --attribute timeout=300 HEAD^!
         env:
           PR: 1 # prevents asv from running very compute-intensive benchmarks
-          PIP_CONSTRAINT: ${{ github.workspace }}/resources/constraints/benchmark.txt
 
       - name: Run benchmarks latest release
         # here we check if the benchmark on the latest release is not broken
-        run: |
-          asv run --show-stderr --quick  --attribute timeout=300  ${{ fromJSON(steps.latest_release.outputs.data).target_commitish }}^!
         env:
           PR: 1  # prevents asv from running very compute-intensive benchmarks
-          PIP_CONSTRAINT: ${{ github.workspace }}/resources/constraints/benchmark.txt
+          BASE_REF: ${{ fromJSON(steps.latest_release.outputs.data).target_commitish }}
+        run: |
+          pixi run --frozen -e benchmarks asv run --show-stderr --quick --attribute timeout=300 "${BASE_REF}^!"
 
       - name: Upload triangulation artifacts
         if: failure()

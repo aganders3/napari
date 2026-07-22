@@ -129,6 +129,14 @@ types-requests = "*"
 [feature.typing.tasks]
 mypy = "mypy --config-file pyproject.toml --pretty --show-error-codes src/napari"
 
+# Benchmarks profile: provides the asv tool (which builds its own virtualenvs to
+# run the benchmarks). Replaces the pip-install + benchmark.txt constraint.
+[feature.benchmarks]
+platforms = ["linux-64", "osx-arm64"]  # non-Qt benchmarks on ubuntu, Qt on macos-15
+[feature.benchmarks.pypi-dependencies]
+asv = { version = "*", extras = ["virtualenv"] }
+pympler = "!=1.1"
+
 # Shared test tasks
 # Profiles that define their own `test` task (headless-test / examples-test) are
 # never combined with this feature, so the task name does not collide.
@@ -164,3 +172,6 @@ test-py312-examples = ["py312", "examples-test"]
 
 # Type checking (mypy) — replaces the tox `mypy` env
 typing = ["py312", "typing"]
+
+# Benchmarks (asv) — replaces the pip-install + benchmark.txt constraint
+benchmarks = ["py312", "benchmarks"]
